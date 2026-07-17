@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recruiter — Alex, Recruitment Coordinator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --border: #e3e5ea;
+    --text: #1c1f26;
+    --muted: #6b7280;
+    --accent: #4f46e5;
+    --accent-dark: #4338ca;
+    --radius: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161c;
+      --panel: #1c1f28;
+      --border: #2c2f3a;
+      --text: #eef0f4;
+      --muted: #9aa1b1;
+      --accent: #818cf8;
+      --accent-dark: #6366f1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Sora', Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .panel h2 { margin: 0 0 16px; font-size: 16px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  label { font-size: 12.5px; color: var(--muted); font-weight: 500; }
+  input, select, textarea {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 9px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  button {
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 20px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-dark); }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .actions { display: flex; gap: 10px; margin-top: 18px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tab {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    color: var(--muted);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+  .ad-body { white-space: pre-wrap; font-size: 13.5px; line-height: 1.6; }
+  .status { font-size: 13px; margin-top: 10px; }
+  .status.error { color: #dc2626; }
+  .status.ok { color: #16a34a; }
+  .hidden { display: none !important; }
+  .spinner {
+    width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4); border-top-color: white;
+    display: inline-block; margin-right: 8px; vertical-align: -2px;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Alex — Recruitment Coordinator</h1>
+  <p>ATLAS Recruitment Agent · submit a request and Alex drafts the advertisement and notifies HR</p>
+</header>
+
+<main>
+  <section class="panel" id="request-panel">
+    <h2>New Recruitment Request</h2>
+    <form id="request-form">
+      <div class="grid">
+        <div class="field"><label>Department *</label><input name="department" required /></div>
+        <div class="field"><label>Position *</label><input name="position" required /></div>
+        <div class="field"><label>Number of Vacancies *</label><input name="vacancies" type="number" min="1" value="1" required /></div>
+        <div class="field">
+          <label>Employment Type *</label>
+          <select name="employmentType" required>
+            <option value="Full-time">Full-time</option>
+            <option value="Part-time">Part-time</option>
+            <option value="Contract">Contract</option>
+            <option value="Internship">Internship</option>
+          </select>
+        </div>
+        <div class="field"><label>Location *</label><input name="location" required /></div>
+        <div class="field"><label>Reporting Manager *</label><input name="reportingManager" required /></div>
+        <div class="field full"><label>Reason for Hiring *</label><textarea name="reasonForHiring" required></textarea></div>
+        <div class="field full"><label>Job Description *</label><textarea name="jobDescription" rows="4" required></textarea></div>
+        <div class="field full"><label>Required Qualifications *</label><textarea name="qualifications" required></textarea></div>
+        <div class="field"><label>Required Experience *</label><input name="experience" required /></div>
+        <div class="field full"><label>Required Skills *</label><textarea name="skills" required></textarea></div>
+        <div class="field"><label>Salary Range (optional)</label><input name="salaryRange" /></div>
+        <div class="field"><label>Expected Joining Date *</label><input name="joiningDate" type="date" required /></div>
+        <div class="field">
+          <label>Priority *</label>
+          <select name="priority" required>
+            <option value="High">High</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="generate-btn">Generate Job Advertisement</button>
+      </div>
+      <div class="status hidden" id="generate-status"></div>
+    </form>
+  </section>
+
+  <section class="panel hidden" id="ad-panel">
+    <h2>Generated Advertisement</h2>
+    <div class="tabs" id="ad-tabs"></div>
+    <div class="ad-body" id="ad-body"></div>
+    <div class="actions">
+      <button class="btn-primary" id="send-hr-btn">Email HR</button>
+      <button class="btn-secondary" id="edit-btn">Back to Request</button>
+    </div>
+    <div class="status hidden" id="send-status"></div>
+  </section>
+</main>
+
+<script>
+const requestForm = document.getElementById('request-form');
+const generateBtn = document.getElementById('generate-btn');
+const generateStatus = document.getElementById('generate-status');
+const requestPanel = document.getElementById('request-panel');
+const adPanel = document.getElementById('ad-panel');
+const adTabs = document.getElementById('ad-tabs');
+const adBody = document.getElementById('ad-body');
+const sendHrBtn = document.getElementById('send-hr-btn');
+const sendStatus = document.getElementById('send-status');
+const editBtn = document.getElementById('edit-btn');
+
+let currentRequest = null;
+let currentAd = null;
+
+const PLATFORM_LABELS = {
+  linkedin: 'LinkedIn',
+  topjobs: 'TopJobs',
+  xpressjobs: 'XpressJobs',
+  facebook_jobs: 'Facebook Jobs',
+  careers_page: 'Careers Page',
+};
+
+function setStatus(el, message, type) {
+  el.textContent = message;
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.classList.remove('hidden');
+}
+
+function showTab(key) {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.key === key));
+  adBody.textContent = currentAd.platform_variants[key];
+}
+
+requestForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(requestForm).entries());
+  generateBtn.disabled = true;
+  generateBtn.innerHTML = '<span class="spinner"></span>Generating…';
+  generateStatus.classList.add('hidden');
+
+  try {
+    const res = await fetch('/.netlify/functions/generate-ad', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Failed to generate advertisement');
+
+    currentRequest = payload.request;
+    currentAd = payload.ad;
+
+    adTabs.innerHTML = '';
+    Object.keys(PLATFORM_LABELS).forEach((key, i) => {
+      const tab = document.createElement('div');
+      tab.className = 'tab' + (i === 0 ? ' active' : '');
+      tab.textContent = PLATFORM_LABELS[key];
+      tab.dataset.key = key;
+      tab.addEventListener('click', () => showTab(key));
+      adTabs.appendChild(tab);
+    });
+    adBody.textContent = currentAd.platform_variants[Object.keys(PLATFORM_LABELS)[0]];
+
+    requestPanel.classList.add('hidden');
+    adPanel.classList.remove('hidden');
+    sendStatus.classList.add('hidden');
+  } catch (err) {
+    setStatus(generateStatus, err.message, 'error');
+  } finally {
+    generateBtn.disabled = false;
+    generateBtn.textContent = 'Generate Job Advertisement';
+  }
+});
+
+sendHrBtn.addEventListener('click', async () => {
+  sendHrBtn.disabled = true;
+  sendHrBtn.innerHTML = '<span class="spinner"></span>Sending…';
+  try {
+    const res = await fetch('/.netlify/functions/notify-hr', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ request: currentRequest, ad: currentAd }),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Failed to email HR');
+    setStatus(sendStatus, 'HR has been notified with the advertisement attached.', 'ok');
+  } catch (err) {
+    setStatus(sendStatus, err.message, 'error');
+  } finally {
+    sendHrBtn.disabled = false;
+    sendHrBtn.textContent = 'Email HR';
+  }
+});
+
+editBtn.addEventListener('click', () => {
+  adPanel.classList.add('hidden');
+  requestPanel.classList.remove('hidden');
+});
+</script>
+
+</body>
+</html>
