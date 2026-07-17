@@ -191,6 +191,17 @@ create table hires (
   created_at timestamptz not null default now()
 );
 
+-- ── Grants ───────────────────────────────────────────────────────────────────
+-- RLS policies restrict WHICH rows a role can touch, but Postgres still requires a
+-- base-level GRANT before a role can attempt the operation at all. Tables created via
+-- the Supabase Table Editor UI get this automatically; tables created via raw SQL
+-- (like this file) don't, and every query 403s with "permission denied" until granted.
+grant usage on schema public to authenticated, anon;
+grant select on public.companies to authenticated;
+grant select on public.profiles to authenticated;
+grant select, insert, update on public.recruitment_requests to authenticated;
+grant select, insert on public.audit_log to authenticated;
+
 -- ── RLS ───────────────────────────────────────────────────────────────────
 alter table companies enable row level security;
 alter table profiles enable row level security;
