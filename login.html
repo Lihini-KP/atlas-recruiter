@@ -47,7 +47,7 @@ function setStatus(message, type) {
 }
 
 // If already signed in, skip straight to the app.
-supabase.auth.getSession().then(({ data }) => {
+sb.auth.getSession().then(({ data }) => {
   if (data.session) location.href = 'index.html';
 });
 
@@ -58,7 +58,7 @@ form.addEventListener('submit', async (e) => {
   btn.innerHTML = '<span class="spinner"></span>Signing in…';
   status.classList.add('hidden');
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) {
     setStatus(error.message, 'error');
     btn.disabled = false;

@@ -46,7 +46,7 @@ window.authReady.then(async (profile) => {
   if (!profile) return;
   renderSidebar('dashboard.html');
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('recruitment_requests')
     .select('vacancies, status');
 

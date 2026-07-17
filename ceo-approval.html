@@ -56,7 +56,7 @@ function renderRequest(r) {
 }
 
 async function loadQueue() {
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('recruitment_requests')
     .select('*, companies(name)')
     .eq('status', 'pending_approval')
@@ -85,7 +85,7 @@ async function loadQueue() {
 
       const patch = { status: action, ceo_approved_by: window.currentProfile.id, ceo_approved_at: new Date().toISOString() };
 
-      const { data: updated, error: updateError } = await supabase
+      const { data: updated, error: updateError } = await sb
         .from('recruitment_requests')
         .update(patch)
         .eq('id', id)
@@ -100,7 +100,7 @@ async function loadQueue() {
         return;
       }
 
-      await supabase.from('audit_log').insert({
+      await sb.from('audit_log').insert({
         actor_profile_id: window.currentProfile.id,
         action: `ceo_${action}`,
         entity_type: 'recruitment_request',

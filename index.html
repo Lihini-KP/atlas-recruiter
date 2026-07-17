@@ -127,7 +127,7 @@ window.authReady.then(async (profile) => {
   renderSidebar('index.html');
   requestedByDisplay.value = `${profile.full_name} (${profile.role.replace('_', ' ')})`;
 
-  const { data: companies, error } = await supabase.from('companies').select('id, name').order('name');
+  const { data: companies, error } = await sb.from('companies').select('id, name').order('name');
   if (error) {
     setStatus(submitStatus, `Could not load companies: ${error.message}`, 'error');
     return;
@@ -167,7 +167,7 @@ form.addEventListener('submit', async (e) => {
     status: 'pending_approval',
   };
 
-  const { data: inserted, error } = await supabase.from('recruitment_requests').insert(row).select().single();
+  const { data: inserted, error } = await sb.from('recruitment_requests').insert(row).select().single();
 
   if (error) {
     setStatus(submitStatus, error.message, 'error');
@@ -176,7 +176,7 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  await supabase.from('audit_log').insert({
+  await sb.from('audit_log').insert({
     actor_profile_id: profile.id,
     action: 'submitted',
     entity_type: 'recruitment_request',
