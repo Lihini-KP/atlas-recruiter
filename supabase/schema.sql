@@ -215,30 +215,17 @@ create policy "recruitment_requests readable by requester, hr, ceo, admin"
     or exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'ceo', 'admin'))
   );
 
-create policy "department_manager can insert their own requests"
+create policy "any authenticated user can insert their own requests"
   on recruitment_requests for insert
-  with check (
-    requested_by = auth.uid()
-    and exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('department_manager', 'admin'))
-  );
+  with check (requested_by = auth.uid());
 
-create policy "hr can move draft/pending_approval requests"
+create policy "hr can approve/reject/hold requests"
   on recruitment_requests for update
   using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'admin'))
   )
   with check (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'admin'))
-  );
-
-create policy "ceo can approve/reject pending requests"
-  on recruitment_requests for update
-  using (
-    status = 'pending_approval'
-    and exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('ceo', 'admin'))
-  )
-  with check (
-    exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('ceo', 'admin'))
   );
 
 create policy "audit_log insert by any authenticated user, read by hr/admin"

@@ -16,7 +16,7 @@
 <header>
   <div class="brand">
     <h1>HR Review</h1>
-    <p>Recruitment requests awaiting HR review before CEO approval.</p>
+    <p>Recruitment requests awaiting HR approval.</p>
   </div>
 </header>
 
@@ -46,7 +46,7 @@ function renderRequest(r) {
         ${r.additional_remarks ? `<div class="field full"><label>Additional Remarks</label><div>${r.additional_remarks}</div></div>` : ''}
       </div>
       <div class="actions">
-        <button class="btn-primary" data-action="forward">Forward to CEO</button>
+        <button class="btn-primary" data-action="approved">Approve</button>
         <button class="btn-secondary" data-action="on_hold">Put On Hold</button>
         <button class="btn-secondary" data-action="rejected" style="color:#dc2626">Reject</button>
       </div>
@@ -60,7 +60,6 @@ async function loadQueue() {
     .from('recruitment_requests')
     .select('*, companies(name)')
     .eq('status', 'pending_approval')
-    .is('hr_reviewed_at', null)
     .order('created_at', { ascending: true });
 
   if (error) {
@@ -83,8 +82,7 @@ async function loadQueue() {
       const statusEl = section.querySelector('.status');
       section.querySelectorAll('button').forEach((b) => (b.disabled = true));
 
-      const newStatus = action === 'forward' ? 'pending_approval' : action;
-      const patch = { status: newStatus, hr_reviewed_by: window.currentProfile.id, hr_reviewed_at: new Date().toISOString() };
+      const patch = { status: action, hr_reviewed_by: window.currentProfile.id, hr_reviewed_at: new Date().toISOString() };
 
       const { data: updated, error: updateError } = await sb
         .from('recruitment_requests')
