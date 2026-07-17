@@ -201,11 +201,23 @@ create policy "companies readable by any authenticated user"
   on companies for select
   using (auth.role() = 'authenticated');
 
+-- security definer so this bypasses RLS internally — a policy on `profiles` that
+-- queries `profiles` again via a plain subquery causes infinite recursion in Postgres.
+create or replace function public.current_user_role()
+returns profile_role
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select role from profiles where id = auth.uid();
+$$;
+
 create policy "profiles readable by self, hr, admin"
   on profiles for select
   using (
     id = auth.uid()
-    or exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'admin'))
+    or current_user_role() in ('hr', 'admin')
   );
 
 create policy "recruitment_requests readable by requester, hr, ceo, admin"
