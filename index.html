@@ -3,100 +3,118 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Recruiter — Alex, Recruitment Coordinator</title>
+<title>New Recruitment Request — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
 
 <header>
   <div class="brand">
-    <h1>Alex — Recruitment Coordinator</h1>
-    <p>ATLAS Recruitment Agent · submit a request and Alex drafts the advertisement and notifies HR</p>
+    <h1>New Recruitment Request</h1>
+    <p>Submitted requests go to HR review, then CEO approval, before recruitment starts.</p>
   </div>
-  <nav>
-    <a href="index.html" class="active">New Request</a>
-    <a href="dashboard.html">Dashboard</a>
-  </nav>
 </header>
 
 <main>
   <section class="panel" id="request-panel">
-    <h2>New Recruitment Request</h2>
+    <h2>Recruitment Request</h2>
     <form id="request-form">
       <div class="grid">
+        <div class="field">
+          <label>Company *</label>
+          <select name="companyId" id="company-select" required></select>
+        </div>
         <div class="field"><label>Department *</label><input name="department" required /></div>
-        <div class="field"><label>Position *</label><input name="position" required /></div>
+        <div class="field"><label>Designation *</label><input name="designation" required /></div>
         <div class="field"><label>Number of Vacancies *</label><input name="vacancies" type="number" min="1" value="1" required /></div>
         <div class="field">
           <label>Employment Type *</label>
           <select name="employmentType" required>
-            <option value="Full-time">Full-time</option>
-            <option value="Part-time">Part-time</option>
+            <option value="Permanent">Permanent</option>
             <option value="Contract">Contract</option>
             <option value="Internship">Internship</option>
+            <option value="Part Time">Part Time</option>
+            <option value="Temporary">Temporary</option>
           </select>
         </div>
-        <div class="field"><label>Location *</label><input name="location" required /></div>
+        <div class="field"><label>Work Location *</label><input name="workLocation" required /></div>
         <div class="field"><label>Reporting Manager *</label><input name="reportingManager" required /></div>
-        <div class="field full"><label>Reason for Hiring *</label><textarea name="reasonForHiring" required></textarea></div>
-        <div class="field full"><label>Job Description *</label><textarea name="jobDescription" rows="4" required></textarea></div>
-        <div class="field full"><label>Required Qualifications *</label><textarea name="qualifications" required></textarea></div>
-        <div class="field"><label>Required Experience *</label><input name="experience" required /></div>
-        <div class="field full"><label>Required Skills *</label><textarea name="skills" required></textarea></div>
-        <div class="field"><label>Salary Range (optional)</label><input name="salaryRange" /></div>
-        <div class="field"><label>Expected Joining Date *</label><input name="joiningDate" type="date" required /></div>
+        <div class="field"><label>Salary Range</label><input name="salaryRange" /></div>
+        <div class="field"><label>Required Experience *</label><input name="requiredExperience" required /></div>
+        <div class="field full"><label>Required Qualifications *</label><textarea name="requiredQualifications" required></textarea></div>
+        <div class="field"><label>Preferred Gender (optional)</label>
+          <select name="preferredGender">
+            <option value="">No preference</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+        <div class="field"><label>Preferred Age Range (optional)</label><input name="preferredAgeRange" placeholder="e.g. 25-35" /></div>
+        <div class="field"><label>Requested By</label><input id="requested-by-display" disabled /></div>
+        <div class="field"><label>Request Date *</label><input name="requestDate" type="date" required /></div>
         <div class="field">
           <label>Priority *</label>
           <select name="priority" required>
-            <option value="High">High</option>
-            <option value="Medium" selected>Medium</option>
             <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+            <option value="Urgent">Urgent</option>
           </select>
         </div>
+        <div class="field">
+          <label>Reason for Recruitment *</label>
+          <select name="reason" id="reason-select" required>
+            <option value="New Position">New Position</option>
+            <option value="Replacement">Replacement</option>
+            <option value="Expansion">Expansion</option>
+            <option value="Internal Transfer">Internal Transfer</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field full hidden" id="reason-other-field">
+          <label>Please specify</label>
+          <input name="reasonOtherText" />
+        </div>
+        <div class="field full"><label>Additional Remarks</label><textarea name="additionalRemarks"></textarea></div>
       </div>
       <div class="actions">
-        <button type="submit" class="btn-primary" id="generate-btn">Generate Job Advertisement</button>
+        <button type="submit" class="btn-primary" id="submit-btn">Submit Request</button>
       </div>
-      <div class="status hidden" id="generate-status"></div>
+      <div class="status hidden" id="submit-status"></div>
     </form>
   </section>
 
-  <section class="panel hidden" id="ad-panel">
-    <h2>Generated Advertisement</h2>
-    <div class="tabs" id="ad-tabs"></div>
-    <div class="ad-body" id="ad-body"></div>
-    <div class="actions">
-      <button class="btn-primary" id="send-hr-btn">Email HR</button>
-      <button class="btn-secondary" id="edit-btn">Back to Request</button>
-    </div>
-    <div class="status hidden" id="send-status"></div>
+  <section class="panel hidden" id="done-panel">
+    <h2>Request Submitted</h2>
+    <p>Your recruitment request has been sent for HR review, then CEO approval. You can track its
+    status from the Dashboard.</p>
   </section>
 </main>
 
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
 <script>
-const requestForm = document.getElementById('request-form');
-const generateBtn = document.getElementById('generate-btn');
-const generateStatus = document.getElementById('generate-status');
+const form = document.getElementById('request-form');
+const submitBtn = document.getElementById('submit-btn');
+const submitStatus = document.getElementById('submit-status');
 const requestPanel = document.getElementById('request-panel');
-const adPanel = document.getElementById('ad-panel');
-const adTabs = document.getElementById('ad-tabs');
-const adBody = document.getElementById('ad-body');
-const sendHrBtn = document.getElementById('send-hr-btn');
-const sendStatus = document.getElementById('send-status');
-const editBtn = document.getElementById('edit-btn');
+const donePanel = document.getElementById('done-panel');
+const companySelect = document.getElementById('company-select');
+const reasonSelect = document.getElementById('reason-select');
+const reasonOtherField = document.getElementById('reason-other-field');
+const requestedByDisplay = document.getElementById('requested-by-display');
 
-let currentRequest = null;
-let currentAd = null;
+form.requestDate.valueAsDate = new Date();
 
-const PLATFORM_LABELS = {
-  linkedin: 'LinkedIn',
-  topjobs: 'TopJobs',
-  xpressjobs: 'XpressJobs',
-  facebook_jobs: 'Facebook Jobs',
-  careers_page: 'Careers Page',
-};
+reasonSelect.addEventListener('change', () => {
+  reasonOtherField.classList.toggle('hidden', reasonSelect.value !== 'Other');
+});
 
 function setStatus(el, message, type) {
   el.textContent = message;
@@ -104,75 +122,71 @@ function setStatus(el, message, type) {
   el.classList.remove('hidden');
 }
 
-function showTab(key) {
-  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.key === key));
-  adBody.textContent = currentAd.platform_variants[key];
-}
+window.authReady.then(async (profile) => {
+  if (!profile) return;
+  renderSidebar('index.html');
+  requestedByDisplay.value = `${profile.full_name} (${profile.role.replace('_', ' ')})`;
 
-requestForm.addEventListener('submit', async (e) => {
+  const { data: companies, error } = await supabase.from('companies').select('id, name').order('name');
+  if (error) {
+    setStatus(submitStatus, `Could not load companies: ${error.message}`, 'error');
+    return;
+  }
+  companySelect.innerHTML = companies.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+});
+
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const data = Object.fromEntries(new FormData(requestForm).entries());
-  generateBtn.disabled = true;
-  generateBtn.innerHTML = '<span class="spinner"></span>Generating…';
-  generateStatus.classList.add('hidden');
+  const profile = window.currentProfile;
+  if (!profile) return;
 
-  try {
-    const res = await fetch('/.netlify/functions/generate-ad', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error || 'Failed to generate advertisement');
+  const data = Object.fromEntries(new FormData(form).entries());
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner"></span>Submitting…';
+  submitStatus.classList.add('hidden');
 
-    currentRequest = payload.request;
-    currentAd = payload.ad;
+  const row = {
+    company_id: data.companyId,
+    department: data.department,
+    designation: data.designation,
+    vacancies: Number(data.vacancies),
+    employment_type: data.employmentType,
+    work_location: data.workLocation,
+    reporting_manager: data.reportingManager,
+    salary_range: data.salaryRange || null,
+    required_experience: data.requiredExperience,
+    required_qualifications: data.requiredQualifications,
+    preferred_gender: data.preferredGender || null,
+    preferred_age_range: data.preferredAgeRange || null,
+    requested_by: profile.id,
+    request_date: data.requestDate,
+    priority: data.priority,
+    reason: data.reason,
+    reason_other_text: data.reason === 'Other' ? data.reasonOtherText : null,
+    additional_remarks: data.additionalRemarks || null,
+    status: 'pending_approval',
+  };
 
-    adTabs.innerHTML = '';
-    Object.keys(PLATFORM_LABELS).forEach((key, i) => {
-      const tab = document.createElement('div');
-      tab.className = 'tab' + (i === 0 ? ' active' : '');
-      tab.textContent = PLATFORM_LABELS[key];
-      tab.dataset.key = key;
-      tab.addEventListener('click', () => showTab(key));
-      adTabs.appendChild(tab);
-    });
-    adBody.textContent = currentAd.platform_variants[Object.keys(PLATFORM_LABELS)[0]];
+  const { data: inserted, error } = await supabase.from('recruitment_requests').insert(row).select().single();
 
-    requestPanel.classList.add('hidden');
-    adPanel.classList.remove('hidden');
-    sendStatus.classList.add('hidden');
-  } catch (err) {
-    setStatus(generateStatus, err.message, 'error');
-  } finally {
-    generateBtn.disabled = false;
-    generateBtn.textContent = 'Generate Job Advertisement';
+  if (error) {
+    setStatus(submitStatus, error.message, 'error');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Request';
+    return;
   }
-});
 
-sendHrBtn.addEventListener('click', async () => {
-  sendHrBtn.disabled = true;
-  sendHrBtn.innerHTML = '<span class="spinner"></span>Sending…';
-  try {
-    const res = await fetch('/.netlify/functions/notify-hr', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ request: currentRequest, ad: currentAd }),
-    });
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error || 'Failed to email HR');
-    setStatus(sendStatus, 'HR has been notified with the advertisement attached.', 'ok');
-  } catch (err) {
-    setStatus(sendStatus, err.message, 'error');
-  } finally {
-    sendHrBtn.disabled = false;
-    sendHrBtn.textContent = 'Email HR';
-  }
-});
+  await supabase.from('audit_log').insert({
+    actor_profile_id: profile.id,
+    action: 'submitted',
+    entity_type: 'recruitment_request',
+    entity_id: inserted.id,
+    before: null,
+    after: inserted,
+  });
 
-editBtn.addEventListener('click', () => {
-  adPanel.classList.add('hidden');
-  requestPanel.classList.remove('hidden');
+  requestPanel.classList.add('hidden');
+  donePanel.classList.remove('hidden');
 });
 </script>
 

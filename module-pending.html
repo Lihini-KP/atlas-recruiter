@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Coming Soon — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1 id="module-title">Module</h1>
+    <p>Not built yet</p>
+  </div>
+</header>
+
+<main>
+  <section class="panel">
+    <p id="module-message">This part of the Recruitment Agent hasn't been built yet.</p>
+  </section>
+</main>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const name = params.get('name') || 'This module';
+const phase = params.get('phase');
+document.getElementById('module-title').textContent = name;
+document.getElementById('module-message').textContent = phase
+  ? `${name} is planned for Phase ${phase} of the recruitment agent build-out — not built yet.`
+  : `${name} hasn't been built yet.`;
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar(''); // no matching item — nothing highlighted
+});
+</script>
+
+</body>
+</html>

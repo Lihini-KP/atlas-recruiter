@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign In — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Alex — Recruitment Coordinator</h1>
+    <p>ATLAS Recruitment Agent</p>
+  </div>
+</header>
+
+<main style="max-width: 380px;">
+  <section class="panel">
+    <h2>Sign In</h2>
+    <form id="login-form">
+      <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="field"><label>Email *</label><input name="email" type="email" required autocomplete="username" /></div>
+        <div class="field"><label>Password *</label><input name="password" type="password" required autocomplete="current-password" /></div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
+      </div>
+      <div class="status hidden" id="login-status"></div>
+    </form>
+  </section>
+</main>
+
+<script src="lib/supabase-client.js"></script>
+<script>
+const form = document.getElementById('login-form');
+const btn = document.getElementById('login-btn');
+const status = document.getElementById('login-status');
+
+function setStatus(message, type) {
+  status.textContent = message;
+  status.className = 'status' + (type ? ' ' + type : '');
+  status.classList.remove('hidden');
+}
+
+// If already signed in, skip straight to the app.
+supabase.auth.getSession().then(({ data }) => {
+  if (data.session) location.href = 'index.html';
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const { email, password } = Object.fromEntries(new FormData(form).entries());
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Signing in…';
+  status.classList.add('hidden');
+
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    setStatus(error.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+    return;
+  }
+  location.href = 'index.html';
+});
+</script>
+
+</body>
+</html>

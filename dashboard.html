@@ -7,26 +7,25 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
 
 <header>
   <div class="brand">
     <h1>Recruitment Dashboard</h1>
     <p>ATLAS Recruitment Agent · live status of every open vacancy</p>
   </div>
-  <nav>
-    <a href="index.html">New Request</a>
-    <a href="dashboard.html" class="active">Dashboard</a>
-  </nav>
 </header>
 
 <main>
   <section class="panel">
     <h2>Overview</h2>
     <div class="kpi-grid" id="kpi-grid">
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Total Vacancies</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Active Recruitments</div></div>
+      <div class="kpi-tile"><div class="value" id="kpi-total-vacancies">—</div><div class="label">Total Vacancies</div></div>
+      <div class="kpi-tile"><div class="value" id="kpi-active-recruitments">—</div><div class="label">Active Recruitments</div></div>
       <div class="kpi-tile"><div class="value">—</div><div class="label">Applications Received</div></div>
       <div class="kpi-tile"><div class="value">—</div><div class="label">Candidates Awaiting Review</div></div>
       <div class="kpi-tile"><div class="value">—</div><div class="label">Shortlisted Candidates</div></div>
@@ -34,10 +33,32 @@
       <div class="kpi-tile"><div class="value">—</div><div class="label">Offers Sent</div></div>
       <div class="kpi-tile"><div class="value">—</div><div class="label">Positions Filled</div></div>
     </div>
-    <p class="kpi-note">These tiles are placeholders. Once Supabase is connected, this page will read live
-    counts from the recruitment requests, applications and candidate tables instead of showing dashes.</p>
+    <p class="kpi-note">Total Vacancies and Active Recruitments are live from Supabase. The rest stay
+    placeholders until the candidate pipeline (Phase 2–5) exists.</p>
   </section>
 </main>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+window.authReady.then(async (profile) => {
+  if (!profile) return;
+  renderSidebar('dashboard.html');
+
+  const { data, error } = await supabase
+    .from('recruitment_requests')
+    .select('vacancies, status');
+
+  if (error) return;
+
+  const totalVacancies = data.reduce((sum, r) => sum + (r.vacancies || 0), 0);
+  const active = data.filter((r) => ['pending_approval', 'approved'].includes(r.status)).length;
+
+  document.getElementById('kpi-total-vacancies').textContent = totalVacancies;
+  document.getElementById('kpi-active-recruitments').textContent = active;
+});
+</script>
 
 </body>
 </html>
