@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Candidate Assessment — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Candidate Assessment</h1>
+    <p id="position-line">Silk Foods Ceylon (Pvt) Ltd · Human Resources Department</p>
+  </div>
+</header>
+
+<main>
+  <section class="panel" id="form-panel">
+    <h2>A few quick questions</h2>
+    <form id="assessment-form">
+      <div class="grid">
+        <div class="field"><label>Candidate Name *</label><input name="candidateName" required /></div>
+        <div class="field"><label>Email *</label><input name="candidateEmail" type="email" required /></div>
+        <div class="field full"><label>Position Applied For *</label><input name="position" required /></div>
+
+        <div class="field">
+          <label>Are you currently employed? *</label>
+          <select name="currentlyEmployed" id="currently-employed" required>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+        <div class="field" id="notice-period-field">
+          <label>If employed, what is your notice period?</label>
+          <select name="noticePeriod">
+            <option value="Immediate">Immediate</option>
+            <option value="2 Weeks">2 Weeks</option>
+            <option value="1 Month">1 Month</option>
+            <option value="2 Months">2 Months</option>
+            <option value="3 Months">3 Months</option>
+          </select>
+        </div>
+        <div class="field"><label>Expected Monthly Salary *</label><input name="expectedSalary" placeholder="e.g. LKR 180,000" required /></div>
+        <div class="field"><label>When can you join? *</label><input name="availableFrom" type="date" required /></div>
+        <div class="field full">
+          <label>Are you willing to work in our office location? *</label>
+          <select name="willingLocation" required>
+            <option value="Yes">Yes</option>
+            <option value="No">No</option>
+          </select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="submit-btn">Submit Assessment</button>
+      </div>
+      <div class="status hidden" id="submit-status"></div>
+    </form>
+  </section>
+
+  <section class="panel hidden" id="done-panel">
+    <h2>Thank you</h2>
+    <p>Your assessment has been received. Our HR Department will be in touch if your profile is shortlisted.</p>
+  </section>
+</main>
+
+<script>
+const form = document.getElementById('assessment-form');
+const submitBtn = document.getElementById('submit-btn');
+const submitStatus = document.getElementById('submit-status');
+const formPanel = document.getElementById('form-panel');
+const donePanel = document.getElementById('done-panel');
+const positionLine = document.getElementById('position-line');
+
+// Pre-fill from a link like assessment.html?position=Marketing+Executive&name=John+Silva&email=john@example.com
+const params = new URLSearchParams(location.search);
+if (params.get('position')) {
+  form.position.value = params.get('position');
+  positionLine.textContent = `Applying for: ${params.get('position')}`;
+}
+if (params.get('name')) form.candidateName.value = params.get('name');
+if (params.get('email')) form.candidateEmail.value = params.get('email');
+
+function setStatus(el, message, type) {
+  el.textContent = message;
+  el.className = 'status' + (type ? ' ' + type : '');
+  el.classList.remove('hidden');
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(form).entries());
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<span class="spinner"></span>Submitting…';
+  submitStatus.classList.add('hidden');
+
+  try {
+    const res = await fetch('/.netlify/functions/submit-assessment', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Failed to submit assessment');
+
+    formPanel.classList.add('hidden');
+    donePanel.classList.remove('hidden');
+  } catch (err) {
+    setStatus(submitStatus, err.message, 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Assessment';
+  }
+});
+</script>
+
+</body>
+</html>
