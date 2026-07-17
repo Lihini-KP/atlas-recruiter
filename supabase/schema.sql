@@ -238,9 +238,12 @@ create policy "recruitment_requests readable by requester, hr, ceo, admin"
     or exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'ceo', 'admin'))
   );
 
-create policy "any authenticated user can insert their own requests"
+create policy "department_manager and admin can insert their own requests"
   on recruitment_requests for insert
-  with check (requested_by = auth.uid());
+  with check (
+    requested_by = auth.uid()
+    and current_user_role() in ('department_manager', 'admin')
+  );
 
 create policy "hr can approve/reject/hold requests"
   on recruitment_requests for update
