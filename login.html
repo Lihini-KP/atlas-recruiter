@@ -23,7 +23,7 @@
     <h2>Sign In</h2>
     <form id="login-form">
       <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="field"><label>Email *</label><input name="email" type="email" required autocomplete="username" /></div>
+        <div class="field"><label>Name *</label><select name="name" id="name-select" required></select></div>
         <div class="field"><label>Password *</label><input name="password" type="password" required autocomplete="current-password" /></div>
       </div>
       <div class="actions">
@@ -36,9 +36,26 @@
 
 <script src="lib/supabase-client.js"></script>
 <script>
+// TODO: move this to a proper employee directory once one exists (see srv-dashboard's
+// planned `employees` table) — hardcoded here since Phase 0 only has 5 people, and the
+// login page runs before authentication so it can't query the `profiles` table (RLS).
+const NAME_TO_EMAIL = {
+  'Lihini K': 'hra@esilkroute.com.lk',
+  'Dhanusha Herath': 'procurement@plantbased.lk',
+  'Amila Athapaththu': 'marketing@esilkroute.com.lk',
+  'Sahan Bakmiwewa': 'sahan@esilkroute.com.lk',
+  'Sandani Nishadini': 'hr@esilkroute.com.lk',
+};
+
 const form = document.getElementById('login-form');
 const btn = document.getElementById('login-btn');
 const status = document.getElementById('login-status');
+const nameSelect = document.getElementById('name-select');
+
+nameSelect.innerHTML = Object.keys(NAME_TO_EMAIL)
+  .sort()
+  .map((name) => `<option value="${name}">${name}</option>`)
+  .join('');
 
 function setStatus(message, type) {
   status.textContent = message;
@@ -53,7 +70,8 @@ sb.auth.getSession().then(({ data }) => {
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const { email, password } = Object.fromEntries(new FormData(form).entries());
+  const { name, password } = Object.fromEntries(new FormData(form).entries());
+  const email = NAME_TO_EMAIL[name];
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Signing in…';
   status.classList.add('hidden');
