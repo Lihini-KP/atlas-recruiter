@@ -24,7 +24,7 @@ create type request_status as enum (
 );
 
 create type candidate_status as enum (
-  'applied', 'assessment_pending', 'assessment_completed', 'shortlisted',
+  'unmatched', 'applied', 'assessment_pending', 'assessment_completed', 'shortlisted',
   'interview_scheduled', 'interviewed', 'rejected', 'offer_sent', 'hired'
 );
 
@@ -108,7 +108,7 @@ create table advertisements (
 
 create table candidates (
   id uuid primary key default gen_random_uuid(),
-  recruitment_request_id uuid not null references recruitment_requests(id),
+  recruitment_request_id uuid references recruitment_requests(id), -- null until matched (e.g. an emailed CV before HR assigns it)
   first_name text,
   last_name text,
   full_name text,
@@ -118,6 +118,9 @@ create table candidates (
   address text,
   cv_storage_path text,
   status candidate_status not null default 'applied',
+  source text, -- e.g. 'email_import', 'application_portal'
+  source_email_id text, -- Gmail message id, for de-duplication on re-runs
+  source_subject text,
   applied_at timestamptz not null default now()
 );
 
@@ -294,3 +297,40 @@ create policy "hr admin can upload to advertisements bucket"
     bucket_id = 'advertisements'
     and public.current_user_role() in ('hr', 'admin')
   );
+
+-- ── CV Folder: candidates + CV storage ───────────────────────────────────────
+-- 'unmatched' already added to candidate_status above; recruitment_request_id is
+-- nullable and source/source_email_id/source_subject columns added for existing
+-- installs that ran the original (pre-CV-Folder) version of this file.
+alter table candidates alter column recruitment_request_id drop not null;
+alter table candidates add column if not exists source text;
+alter table candidates add column if not exists source_email_id text;
+alter table candidates add column if not exists source_subject text;
+
+grant select, insert, update on public.candidates to authenticated;
+
+create policy "candidates readable by hr, admin"
+  on candidates for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "candidates insertable by hr, admin"
+  on candidates for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "candidates updatable by hr, admin"
+  on candidates for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+-- private bucket: CVs contain candidate PII, unlike the public job-ad posters
+insert into storage.buckets (id, name, public)
+values ('cvs', 'cvs', false)
+on conflict (id) do nothing;
+
+create policy "hr admin can read cvs bucket"
+  on storage.objects for select
+  using (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'));
+
+create policy "hr admin can upload to cvs bucket"
+  on storage.objects for insert
+  with check (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'));
