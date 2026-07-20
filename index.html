@@ -55,7 +55,7 @@
           </select>
         </div>
         <div class="field"><label>Preferred Age Range (optional)</label><input name="preferredAgeRange" placeholder="e.g. 25-35" /></div>
-        <div class="field"><label>Requested By</label><input id="requested-by-display" disabled /></div>
+        <div class="field"><label>Requested By *</label><select name="requestedBy" id="requested-by-select" required></select></div>
         <div class="field"><label>Request Date *</label><input name="requestDate" type="date" required /></div>
         <div class="field">
           <label>Priority *</label>
@@ -108,7 +108,7 @@ const donePanel = document.getElementById('done-panel');
 const companySelect = document.getElementById('company-select');
 const reasonSelect = document.getElementById('reason-select');
 const reasonOtherField = document.getElementById('reason-other-field');
-const requestedByDisplay = document.getElementById('requested-by-display');
+const requestedBySelect = document.getElementById('requested-by-select');
 
 form.requestDate.valueAsDate = new Date();
 
@@ -125,7 +125,6 @@ function setStatus(el, message, type) {
 window.authReady.then(async (profile) => {
   if (!profile) return;
   renderSidebar('index.html');
-  requestedByDisplay.value = `${profile.full_name} (${profile.role.replace('_', ' ')})`;
 
   const { data: companies, error } = await sb.from('companies').select('id, name').order('name');
   if (error) {
@@ -133,6 +132,18 @@ window.authReady.then(async (profile) => {
     return;
   }
   companySelect.innerHTML = companies.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+
+  const { data: requesters, error: requestersError } = await sb
+    .from('profiles')
+    .select('id, full_name')
+    .in('role', ['department_manager', 'admin'])
+    .order('full_name');
+  if (requestersError) {
+    setStatus(submitStatus, `Could not load requesters: ${requestersError.message}`, 'error');
+    return;
+  }
+  requestedBySelect.innerHTML = requesters.map((r) => `<option value="${r.id}">${r.full_name}</option>`).join('');
+  requestedBySelect.value = profile.id;
 });
 
 form.addEventListener('submit', async (e) => {
@@ -158,7 +169,7 @@ form.addEventListener('submit', async (e) => {
     required_qualifications: data.requiredQualifications,
     preferred_gender: data.preferredGender || null,
     preferred_age_range: data.preferredAgeRange || null,
-    requested_by: profile.id,
+    requested_by: data.requestedBy,
     request_date: data.requestDate,
     priority: data.priority,
     reason: data.reason,
