@@ -38,10 +38,28 @@
   .bar-fill { height: 100%; }
   .bar-fill.yes { background: var(--accent); }
   .bar-fill.no { background: var(--muted); }
-  .candidate-row { padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
-  .candidate-row:last-child { border-bottom: none; }
-  .candidate-row .name { font-weight: 600; }
-  .candidate-row .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .chart-block { margin-bottom: 26px; }
+  .chart-block h3 { font-size: 13.5px; margin: 0 0 10px; color: var(--text); }
+  .chart-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .chart-list-row {
+    display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .chart-list-row:last-child { border-bottom: none; }
+  .chart-list-row .value { font-weight: 600; }
+  .candidate-sheet {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 12px;
+  }
+  .candidate-sheet .name { font-weight: 700; font-size: 14.5px; }
+  .candidate-sheet .meta { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
+  .candidate-sheet .qa {
+    display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
+    padding: 5px 0; border-top: 1px dashed var(--border);
+  }
+  .candidate-sheet .qa:first-of-type { border-top: none; }
+  .candidate-sheet .qa span:first-child { color: var(--muted); }
+  .candidate-sheet .qa span:last-child { font-weight: 600; text-align: right; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -109,19 +127,56 @@ function bar(label, yes, no) {
   `;
 }
 
+function countBy(answers, field) {
+  const counts = {};
+  answers.forEach((a) => {
+    const v = a[field] || '—';
+    counts[v] = (counts[v] || 0) + 1;
+  });
+  return counts;
+}
+
+function listChart(title, answers, field) {
+  return `
+    <div class="chart-block">
+      <h3>${title}</h3>
+      <div class="chart-list">
+        ${answers.map((a) => `
+          <div class="chart-list-row">
+            <span>${a.candidateName || a.candidateEmail}</span>
+            <span class="value">${a[field] || '—'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function yesNoChart(title, answers, field) {
+  const yes = answers.filter((a) => a[field] === 'Yes').length;
+  const no = answers.filter((a) => a[field] === 'No').length;
+  return `<div class="chart-block"><h3>${title}</h3>${bar('', yes, no)}</div>`;
+}
+
+function breakdownChart(title, counts) {
+  const entries = Object.entries(counts);
+  if (!entries.length) return '';
+  const total = entries.reduce((sum, [, c]) => sum + c, 0);
+  return `
+    <div class="chart-block">
+      <h3>${title}</h3>
+      ${entries.map(([label, count]) => `
+        <div class="bar-row">
+          <div class="bar-label"><span>${label}</span><span>${count}</span></div>
+          <div class="bar-track"><div class="bar-fill yes" style="width:${pct(count, total)}%"></div></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderGroupDetail(key, items) {
   const answers = items.map((i) => i.answers);
-  const employedYes = answers.filter((a) => a.currentlyEmployed === 'Yes').length;
-  const employedNo = answers.filter((a) => a.currentlyEmployed === 'No').length;
-  const willingYes = answers.filter((a) => a.willingLocation === 'Yes').length;
-  const willingNo = answers.filter((a) => a.willingLocation === 'No').length;
-
-  const noticeCounts = {};
-  answers.forEach((a) => {
-    if (a.currentlyEmployed === 'Yes' && a.noticePeriod) {
-      noticeCounts[a.noticePeriod] = (noticeCounts[a.noticePeriod] || 0) + 1;
-    }
-  });
 
   main.innerHTML = `
     <section class="panel">
@@ -131,30 +186,24 @@ function renderGroupDetail(key, items) {
       <h2>${key}</h2>
       <p class="kpi-note" style="margin-top:-6px">${items.length} assessment${items.length > 1 ? 's' : ''} submitted</p>
 
-      ${bar('Currently employed', employedYes, employedNo)}
-      ${bar('Willing to work at office location', willingYes, willingNo)}
-
-      ${Object.keys(noticeCounts).length ? `
-        <div class="bar-row">
-          <div class="bar-label"><span>Notice period (of those employed)</span></div>
-          ${Object.entries(noticeCounts).map(([period, count]) => `
-            <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">
-              <span>${period}</span><span>${count}</span>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
+      ${yesNoChart('Are you currently employed?', answers, 'currentlyEmployed')}
+      ${breakdownChart('If employed, what is your notice period?', countBy(answers.filter((a) => a.currentlyEmployed === 'Yes'), 'noticePeriod'))}
+      ${listChart('What is your expected monthly salary?', answers, 'expectedSalary')}
+      ${listChart('When can you join?', answers, 'availableFrom')}
+      ${yesNoChart('Are you willing to work in our office location?', answers, 'willingLocation')}
     </section>
 
     <section class="panel">
-      <h2>Candidates</h2>
+      <h2>Candidate Sheets</h2>
       ${answers.map((a) => `
-        <div class="candidate-row">
+        <div class="candidate-sheet">
           <div class="name">${a.candidateName || a.candidateEmail}</div>
-          <div class="meta">
-            ${a.candidateEmail} · Employed: ${a.currentlyEmployed}${a.currentlyEmployed === 'Yes' ? ` (${a.noticePeriod || 'notice period n/a'})` : ''}
-            · Expects: ${a.expectedSalary} · Available: ${a.availableFrom} · Willing to relocate: ${a.willingLocation}
-          </div>
+          <div class="meta">${a.candidateEmail}</div>
+          <div class="qa"><span>Are you currently employed?</span><span>${a.currentlyEmployed}</span></div>
+          <div class="qa"><span>If employed, notice period</span><span>${a.currentlyEmployed === 'Yes' ? (a.noticePeriod || '—') : 'N/A'}</span></div>
+          <div class="qa"><span>Expected monthly salary</span><span>${a.expectedSalary}</span></div>
+          <div class="qa"><span>When can you join?</span><span>${a.availableFrom}</span></div>
+          <div class="qa"><span>Willing to work in our office location?</span><span>${a.willingLocation}</span></div>
         </div>
       `).join('')}
     </section>
