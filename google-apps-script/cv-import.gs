@@ -198,7 +198,7 @@ function candidateAlreadyImported(url, key, messageId) {
 function uploadToSupabaseStorage(url, key, path, blob) {
   const resp = UrlFetchApp.fetch(url + '/storage/v1/object/cvs/' + path, {
     method: 'post',
-    headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT },
+    headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT, 'x-upsert': 'true' },
     contentType: blob.getContentType(),
     payload: blob.getBytes(),
     muteHttpExceptions: true,
