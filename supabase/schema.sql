@@ -334,3 +334,9 @@ create policy "hr admin can read cvs bucket"
 create policy "hr admin can upload to cvs bucket"
   on storage.objects for insert
   with check (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'));
+
+-- needed for x-upsert:true overwriting an existing object at the same path
+create policy "hr admin can update cvs bucket"
+  on storage.objects for update
+  using (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'))
+  with check (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'));
