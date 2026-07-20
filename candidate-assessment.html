@@ -16,7 +16,7 @@
 <header>
   <div class="brand">
     <h1>Candidate Assessment</h1>
-    <p>Assessment submissions grouped by position, with a quick summary per group.</p>
+    <p id="page-subtitle">Choose a company to see its open positions and assessment results.</p>
   </div>
 </header>
 
@@ -25,19 +25,25 @@
 </main>
 
 <style>
-  .group-card {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 18px; border: 1px solid var(--border); border-radius: var(--radius);
-    margin-bottom: 10px; cursor: pointer; background: var(--panel);
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .crumb-nav a:hover { text-decoration: underline; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .tile {
+    border-radius: 14px; padding: 22px 20px; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .group-card:hover { border-color: var(--accent); }
-  .group-card .count { font-size: 13px; color: var(--muted); }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .tile .tile-count { font-size: 12.5px; opacity: 0.8; }
+
   .assessment-table { border-collapse: collapse; width: 100%; font-size: 13px; white-space: nowrap; }
   .assessment-table th, .assessment-table td {
     border: 1px solid var(--border); padding: 9px 14px; text-align: left;
   }
   .assessment-table th { background: var(--bg); font-weight: 700; color: var(--muted); }
-  .assessment-table td:first-child { color: var(--accent); font-weight: 600; }
+  .assessment-table td:first-child { font-weight: 600; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -45,12 +51,18 @@
 <script src="lib/sidebar.js"></script>
 <script>
 const main = document.getElementById('main-content');
+const pageSubtitle = document.getElementById('page-subtitle');
 let allAssessments = [];
 
-function groupKeyFor(candidate) {
-  const r = candidate.recruitment_requests;
-  if (r) return `${r.companies?.name || '—'} / ${r.designation}`;
-  return `Unassigned — ${candidate.source_subject || candidate.full_name || 'Unknown'}`;
+const COMPANY_STYLES = {
+  'Silk Food Ceylon (Pvt) Ltd': { bg: '#e8f5e9', border: '#2e7d32', text: '#1b5e20' },
+  'Silk Route Ventures (Pvt) Ltd': { bg: '#e0f2f1', border: '#00695c', text: '#004d40' },
+  'Ancient Nutraceuticals (Pvt) Ltd': { bg: '#fbe9e7', border: '#bf5b3f', text: '#8a4a2a' },
+  'Unassigned': { bg: '#eceff1', border: '#607d8b', text: '#455a64' },
+};
+
+function companyStyleFor(name) {
+  return COMPANY_STYLES[name] || COMPANY_STYLES['Unassigned'];
 }
 
 function groupBy(items, keyFn) {
@@ -63,8 +75,28 @@ function groupBy(items, keyFn) {
   return map;
 }
 
-function renderGroupList() {
-  const groups = groupBy(allAssessments, (a) => groupKeyFor(a.candidates));
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+}
+
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
+function renderCrumbs(parts) {
+  return `<div class="crumb-nav">${parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    return isLast ? `<span>${p.label}</span>` : `<a data-nav="${p.nav}">${p.label}</a><span>›</span>`;
+  }).join('')}</div>`;
+}
+
+function bindCrumbs() {
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+}
+
+function renderCompanyList() {
+  pageSubtitle.textContent = 'Choose a company to see its open positions and assessment results.';
+  const groups = groupBy(allAssessments, (a) => companyOf(a.candidates));
 
   if (!groups.size) {
     main.innerHTML = '<p class="kpi-note">No assessments submitted yet.</p>';
@@ -72,19 +104,45 @@ function renderGroupList() {
   }
 
   main.innerHTML = `
-    <section class="panel">
-      <h2>By Position</h2>
-      ${Array.from(groups.entries()).map(([key, items]) => `
-        <div class="group-card" data-key="${encodeURIComponent(key)}">
-          <div>${key}</div>
-          <div class="count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
-        </div>
-      `).join('')}
-    </section>
+    <div class="tile-grid">
+      ${Array.from(groups.entries()).map(([name, items]) => {
+        const s = companyStyleFor(name);
+        return `
+          <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-name">${name}</div>
+            <div class="tile-count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
   `;
 
-  main.querySelectorAll('.group-card').forEach((card) => {
-    card.addEventListener('click', () => renderGroupDetail(decodeURIComponent(card.dataset.key), groups.get(decodeURIComponent(card.dataset.key))));
+  main.querySelectorAll('.tile[data-company]').forEach((tile) => {
+    tile.addEventListener('click', () => renderDesignationList(decodeURIComponent(tile.dataset.company)));
+  });
+}
+
+function renderDesignationList(companyName) {
+  pageSubtitle.textContent = `${companyName} · choose a position to view its assessments.`;
+  const s = companyStyleFor(companyName);
+  const companyItems = allAssessments.filter((a) => companyOf(a.candidates) === companyName);
+  const groups = groupBy(companyItems, (a) => designationOf(a.candidates));
+
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    <div class="tile-grid">
+      ${Array.from(groups.entries()).map(([designation, items]) => `
+        <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+          <div class="tile-name">${designation}</div>
+          <div class="tile-count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  bindCrumbs();
+  main.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    tile.addEventListener('click', () => renderAssessmentTable(companyName, decodeURIComponent(tile.dataset.designation), groups.get(decodeURIComponent(tile.dataset.designation))));
   });
 }
 
@@ -97,17 +155,19 @@ const ASSESSMENT_COLUMNS = [
   { label: 'Willing to work in our office location?', get: (a) => a.willingLocation },
 ];
 
-function renderGroupDetail(key, items) {
+function renderAssessmentTable(companyName, designation, items) {
+  pageSubtitle.textContent = `${companyName} · ${designation}`;
   const answers = items.map((i) => i.answers);
 
   main.innerHTML = `
+    ${renderCrumbs([
+      { label: 'Companies', nav: 'companies' },
+      { label: companyName, nav: 'company', company: companyName },
+      { label: designation },
+    ])}
     <section class="panel">
-      <div class="actions" style="margin-top:0;margin-bottom:14px">
-        <button class="btn-secondary" id="back-btn">← Back to positions</button>
-      </div>
-      <h2>${key}</h2>
+      <h2>${designation}</h2>
       <p class="kpi-note" style="margin-top:-6px">${items.length} assessment${items.length > 1 ? 's' : ''} submitted</p>
-
       <div style="overflow-x:auto">
         <table class="assessment-table">
           <thead>
@@ -123,7 +183,9 @@ function renderGroupDetail(key, items) {
     </section>
   `;
 
-  document.getElementById('back-btn').addEventListener('click', renderGroupList);
+  bindCrumbs();
+  const companyCrumb = main.querySelector('[data-nav="company"]');
+  if (companyCrumb) companyCrumb.addEventListener('click', () => renderDesignationList(companyName));
 }
 
 async function loadAssessments() {
@@ -138,7 +200,7 @@ async function loadAssessments() {
   }
 
   allAssessments = data;
-  renderGroupList();
+  renderCompanyList();
 }
 
 window.authReady.then((profile) => {
