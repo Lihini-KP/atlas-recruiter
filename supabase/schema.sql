@@ -263,3 +263,34 @@ create policy "audit_log readable by hr, admin"
   using (
     exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('hr', 'admin'))
   );
+
+-- ── Phase 1: generated advertisement posters ─────────────────────────────────
+alter table advertisements add column if not exists company_code text;
+alter table advertisements add column if not exists designation text;
+alter table advertisements add column if not exists poster_storage_path text;
+
+grant select, insert on public.advertisements to authenticated;
+
+create policy "advertisements readable by hr, admin"
+  on advertisements for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "advertisements insertable by hr, admin"
+  on advertisements for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+-- public bucket: generated job-ad posters are meant to be shared externally anyway
+insert into storage.buckets (id, name, public)
+values ('advertisements', 'advertisements', true)
+on conflict (id) do nothing;
+
+create policy "public read advertisements bucket"
+  on storage.objects for select
+  using (bucket_id = 'advertisements');
+
+create policy "hr admin can upload to advertisements bucket"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'advertisements'
+    and public.current_user_role() in ('hr', 'admin')
+  );

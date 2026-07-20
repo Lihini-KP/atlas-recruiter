@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </head>
 <body class="with-sidebar">
 
@@ -27,6 +28,8 @@
 <script src="lib/supabase-client.js"></script>
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
+<script src="lib/poster-templates.js"></script>
+<script src="lib/generate-poster.js"></script>
 <script>
 const main = document.getElementById('main-content');
 
@@ -55,10 +58,48 @@ function renderRequest(r) {
   `;
 }
 
+function slugify(s) {
+  return s.trim().replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+async function createAdvertisement(r) {
+  const now = new Date();
+  const blob = await generatePosterImage({
+    companyCode: r.companies.code,
+    designation: r.designation,
+    workLocation: r.work_location,
+    employmentType: r.employment_type,
+    vacancies: r.vacancies,
+  });
+
+  if (!blob) {
+    return { skipped: true, reason: `No poster template yet for ${r.companies.name}` };
+  }
+
+  const path = `${r.companies.code}/${slugify(r.department)}/${slugify(r.designation)}/${now.getFullYear()}/${now.getMonth() + 1}/poster.png`;
+
+  const { error: uploadError } = await sb.storage.from('advertisements').upload(path, blob, {
+    contentType: 'image/png',
+    upsert: true,
+  });
+  if (uploadError) throw uploadError;
+
+  const { error: insertError } = await sb.from('advertisements').insert({
+    recruitment_request_id: r.id,
+    company_code: r.companies.code,
+    designation: r.designation,
+    poster_storage_path: path,
+    published: false,
+  });
+  if (insertError) throw insertError;
+
+  return { skipped: false };
+}
+
 async function loadQueue() {
   const { data, error } = await sb
     .from('recruitment_requests')
-    .select('*, companies(name)')
+    .select('*, companies(name, code)')
     .eq('status', 'pending_approval')
     .order('created_at', { ascending: true });
 
@@ -74,41 +115,60 @@ async function loadQueue() {
 
   main.innerHTML = data.map(renderRequest).join('');
 
-  main.querySelectorAll('[data-action]').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const section = btn.closest('section');
-      const id = section.dataset.id;
-      const action = btn.dataset.action;
-      const statusEl = section.querySelector('.status');
-      section.querySelectorAll('button').forEach((b) => (b.disabled = true));
+  data.forEach((r) => {
+    const section = main.querySelector(`section[data-id="${r.id}"]`);
+    section.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        const statusEl = section.querySelector('.status');
+        section.querySelectorAll('button').forEach((b) => (b.disabled = true));
 
-      const patch = { status: action, hr_reviewed_by: window.currentProfile.id, hr_reviewed_at: new Date().toISOString() };
+        const patch = { status: action, hr_reviewed_by: window.currentProfile.id, hr_reviewed_at: new Date().toISOString() };
 
-      const { data: updated, error: updateError } = await sb
-        .from('recruitment_requests')
-        .update(patch)
-        .eq('id', id)
-        .select()
-        .single();
+        const { data: updated, error: updateError } = await sb
+          .from('recruitment_requests')
+          .update(patch)
+          .eq('id', r.id)
+          .select()
+          .single();
 
-      if (updateError) {
-        statusEl.textContent = updateError.message;
-        statusEl.className = 'status error';
-        statusEl.classList.remove('hidden');
-        section.querySelectorAll('button').forEach((b) => (b.disabled = false));
-        return;
-      }
+        if (updateError) {
+          statusEl.textContent = updateError.message;
+          statusEl.className = 'status error';
+          statusEl.classList.remove('hidden');
+          section.querySelectorAll('button').forEach((b) => (b.disabled = false));
+          return;
+        }
 
-      await sb.from('audit_log').insert({
-        actor_profile_id: window.currentProfile.id,
-        action: `hr_${action}`,
-        entity_type: 'recruitment_request',
-        entity_id: id,
-        after: updated,
+        await sb.from('audit_log').insert({
+          actor_profile_id: window.currentProfile.id,
+          action: `hr_${action}`,
+          entity_type: 'recruitment_request',
+          entity_id: r.id,
+          after: updated,
+        });
+
+        if (action === 'approved') {
+          try {
+            const result = await createAdvertisement(r);
+            if (result.skipped) {
+              statusEl.textContent = `Approved. ${result.reason} — add it via the Advertisement tab once available.`;
+              statusEl.className = 'status';
+              statusEl.classList.remove('hidden');
+              setTimeout(() => section.remove(), 2500);
+              return;
+            }
+          } catch (adErr) {
+            statusEl.textContent = `Approved, but advertisement generation failed: ${adErr.message}`;
+            statusEl.className = 'status error';
+            statusEl.classList.remove('hidden');
+            return;
+          }
+        }
+
+        section.remove();
+        if (!main.querySelector('section')) main.innerHTML = '<p class="kpi-note">No requests waiting on HR review.</p>';
       });
-
-      section.remove();
-      if (!main.querySelector('section')) main.innerHTML = '<p class="kpi-note">No requests waiting on HR review.</p>';
     });
   });
 }

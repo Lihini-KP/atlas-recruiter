@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Advertisement — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Advertisement</h1>
+    <p>Posters generated automatically once HR approves a recruitment request.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  .ad-group { margin-bottom: 24px; }
+  .ad-group h2 { font-size: 15px; margin: 0 0 4px; }
+  .ad-group .subhead { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; }
+  .ad-poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+  .ad-card {
+    border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
+    background: var(--panel);
+  }
+  .ad-card img { width: 100%; display: block; }
+  .ad-card .ad-card-body { padding: 10px 12px; }
+  .ad-card .ad-card-body div:first-child { font-size: 13px; font-weight: 600; }
+  .ad-card .ad-card-body div:last-child { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .ad-card a.download { display: block; text-align: center; font-size: 12.5px; padding: 8px; border-top: 1px solid var(--border); text-decoration: none; color: var(--accent); }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+const main = document.getElementById('main-content');
+
+function posterUrl(path) {
+  return sb.storage.from('advertisements').getPublicUrl(path).data.publicUrl;
+}
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+async function loadAds() {
+  const { data, error } = await sb
+    .from('advertisements')
+    .select('*, recruitment_requests(department, companies(name))')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    main.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  if (!data.length) {
+    main.innerHTML = '<p class="kpi-note">No advertisements yet. They appear automatically once HR approves a request.</p>';
+    return;
+  }
+
+  const byCompanyDept = groupBy(
+    data,
+    (ad) => `${ad.recruitment_requests?.companies?.name || ad.company_code} / ${ad.recruitment_requests?.department || '—'}`
+  );
+
+  main.innerHTML = Array.from(byCompanyDept.entries())
+    .map(([groupKey, ads]) => `
+      <section class="panel ad-group">
+        <h2>${groupKey}</h2>
+        <div class="subhead">${ads.length} advertisement${ads.length > 1 ? 's' : ''}</div>
+        <div class="ad-poster-grid">
+          ${ads.map((ad) => `
+            <div class="ad-card">
+              <img src="${posterUrl(ad.poster_storage_path)}" alt="${ad.designation}" loading="lazy" />
+              <div class="ad-card-body">
+                <div>${ad.designation}</div>
+                <div>${new Date(ad.created_at).toLocaleDateString()}</div>
+              </div>
+              <a class="download" href="${posterUrl(ad.poster_storage_path)}" download target="_blank">Download</a>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `)
+    .join('');
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('advertisement.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadAds();
+});
+</script>
+
+</body>
+</html>
