@@ -6,30 +6,46 @@
  * directly inside Gmail, has full native attachment access — so this does the actual
  * automated import that the chat-side connector can't.
  *
+ * Auth approach: signs in as a dedicated low-privilege "bot" account (same as a normal
+ * HR login) rather than using the Supabase secret/service-role key. Supabase blocks
+ * secret-key requests that look like they come from a browser, and Apps Script's
+ * requests trip that heuristic no matter what headers are set — a real authenticated
+ * session token doesn't have that problem, and it's safer anyway (bounded by RLS,
+ * not all-powerful).
+ *
  * Setup (one-time):
- * 1. Go to https://script.google.com while logged in as hra@esilkroute.com.lk.
- * 2. New project → delete the default `myFunction` stub → paste this whole file in.
- * 3. Project Settings (gear icon, left sidebar) → Script Properties → add:
+ * 1. In Supabase, create a Supabase Auth user for the bot (e.g.
+ *    cv-import-bot@esilkroute.com.lk) with a strong password, and give it a
+ *    `profiles` row with role = 'hr' (same SQL pattern used for the other accounts).
+ * 2. Go to https://script.google.com while logged in as hra@esilkroute.com.lk.
+ * 3. New project → delete the default `myFunction` stub → paste this whole file in.
+ * 4. Project Settings (gear icon, left sidebar) → Script Properties → add:
  *      SUPABASE_URL = https://yrztitqsjzdhamomrurl.supabase.co
- *      SUPABASE_SERVICE_ROLE_KEY = <the secret key — never paste it into the script
- *      body itself, only into this Script Properties field>
- * 4. Run ▸ select `importCvsFromGmail` ▸ click Run once to trigger the Google
+ *      SUPABASE_PUBLISHABLE_KEY = sb_publishable_B4aLeP-6Ulc_2ddAeGUYjA__xNHxNJp
+ *      CV_BOT_EMAIL = <the bot account's email>
+ *      CV_BOT_PASSWORD = <the bot account's password>
+ * 5. Run ▸ select `importCvsFromGmail` ▸ click Run once to trigger the Google
  *    authorization prompt (grant it — it's your own script on your own mailbox).
- * 5. Triggers (clock icon, left sidebar) → Add Trigger → function
+ * 6. Triggers (clock icon, left sidebar) → Add Trigger → function
  *    `importCvsFromGmail` → Time-driven → Hour timer → every hour → Save.
  */
 
 const CV_LABEL_NAME = 'ATLAS-Filed';
 const SEARCH_QUERY = 'to:hra@esilkroute.com.lk has:attachment newer_than:3d -label:' + CV_LABEL_NAME;
 const APP_BASE_URL = 'https://atlas-recruiter.netlify.app';
+const SERVER_USER_AGENT = 'AppsScript-ATLAS-CV-Import/1.0';
 
 function importCvsFromGmail() {
   const props = PropertiesService.getScriptProperties();
   const SUPABASE_URL = props.getProperty('SUPABASE_URL');
-  const SERVICE_KEY = props.getProperty('SUPABASE_SERVICE_ROLE_KEY');
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Script Properties first.');
+  const PUBLISHABLE_KEY = props.getProperty('SUPABASE_PUBLISHABLE_KEY');
+  const BOT_EMAIL = props.getProperty('CV_BOT_EMAIL');
+  const BOT_PASSWORD = props.getProperty('CV_BOT_PASSWORD');
+  if (!SUPABASE_URL || !PUBLISHABLE_KEY || !BOT_EMAIL || !BOT_PASSWORD) {
+    throw new Error('Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CV_BOT_EMAIL and CV_BOT_PASSWORD in Script Properties first.');
   }
+
+  const accessToken = getBotAccessToken(SUPABASE_URL, PUBLISHABLE_KEY, BOT_EMAIL, BOT_PASSWORD);
 
   let label = GmailApp.getUserLabelByName(CV_LABEL_NAME);
   if (!label) label = GmailApp.createLabel(CV_LABEL_NAME);
@@ -48,7 +64,7 @@ function importCvsFromGmail() {
         return;
       }
 
-      if (candidateAlreadyImported(SUPABASE_URL, SERVICE_KEY, messageId)) {
+      if (candidateAlreadyImported(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, messageId)) {
         skippedDup++;
         thread.addLabel(label);
         return;
@@ -68,8 +84,8 @@ function importCvsFromGmail() {
       const slug = slugify(senderName || senderEmail || 'candidate');
       const path = 'unmatched/' + now.getFullYear() + '/' + (now.getMonth() + 1) + '/' + slug + '-' + messageId + '.' + ext;
 
-      uploadToSupabaseStorage(SUPABASE_URL, SERVICE_KEY, path, attachment);
-      insertCandidateRow(SUPABASE_URL, SERVICE_KEY, {
+      uploadToSupabaseStorage(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, path, attachment);
+      insertCandidateRow(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, {
         full_name: senderName,
         email: senderEmail,
         cv_storage_path: path,
@@ -91,6 +107,21 @@ function importCvsFromGmail() {
   });
 
   Logger.log('Imported: ' + imported + ', duplicates skipped: ' + skippedDup + ', non-applications skipped: ' + skippedNonApp);
+}
+
+function getBotAccessToken(url, publishableKey, email, password) {
+  const resp = UrlFetchApp.fetch(url + '/auth/v1/token?grant_type=password', {
+    method: 'post',
+    headers: { apikey: publishableKey, 'User-Agent': SERVER_USER_AGENT },
+    contentType: 'application/json',
+    payload: JSON.stringify({ email: email, password: password }),
+    muteHttpExceptions: true,
+  });
+  const data = JSON.parse(resp.getContentText());
+  if (!data.access_token) {
+    throw new Error('Bot login failed: ' + resp.getContentText());
+  }
+  return data.access_token;
 }
 
 function looksLikeApplication(subject, body) {
@@ -177,17 +208,12 @@ function slugify(text) {
     .slice(0, 60);
 }
 
-// Supabase blocks requests using the secret key that look like they came from a
-// browser. Apps Script's default UrlFetchApp user agent trips that heuristic, so
-// every call explicitly overrides it with something clearly non-browser.
-const SERVER_USER_AGENT = 'AppsScript-ATLAS-CV-Import/1.0';
-
-function candidateAlreadyImported(url, key, messageId) {
+function candidateAlreadyImported(url, publishableKey, accessToken, messageId) {
   const resp = UrlFetchApp.fetch(
     url + '/rest/v1/candidates?source_email_id=eq.' + encodeURIComponent(messageId) + '&select=id',
     {
       method: 'get',
-      headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT },
+      headers: { apikey: publishableKey, Authorization: 'Bearer ' + accessToken, 'User-Agent': SERVER_USER_AGENT },
       muteHttpExceptions: true,
     }
   );
@@ -195,10 +221,10 @@ function candidateAlreadyImported(url, key, messageId) {
   return Array.isArray(data) && data.length > 0;
 }
 
-function uploadToSupabaseStorage(url, key, path, blob) {
+function uploadToSupabaseStorage(url, publishableKey, accessToken, path, blob) {
   const resp = UrlFetchApp.fetch(url + '/storage/v1/object/cvs/' + path, {
     method: 'post',
-    headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT, 'x-upsert': 'true' },
+    headers: { apikey: publishableKey, Authorization: 'Bearer ' + accessToken, 'User-Agent': SERVER_USER_AGENT, 'x-upsert': 'true' },
     contentType: blob.getContentType(),
     payload: blob.getBytes(),
     muteHttpExceptions: true,
@@ -208,10 +234,10 @@ function uploadToSupabaseStorage(url, key, path, blob) {
   }
 }
 
-function insertCandidateRow(url, key, row) {
+function insertCandidateRow(url, publishableKey, accessToken, row) {
   const resp = UrlFetchApp.fetch(url + '/rest/v1/candidates', {
     method: 'post',
-    headers: { apikey: key, Authorization: 'Bearer ' + key, Prefer: 'return=minimal', 'User-Agent': SERVER_USER_AGENT },
+    headers: { apikey: publishableKey, Authorization: 'Bearer ' + accessToken, Prefer: 'return=minimal', 'User-Agent': SERVER_USER_AGENT },
     contentType: 'application/json',
     payload: JSON.stringify(row),
     muteHttpExceptions: true,
