@@ -177,12 +177,17 @@ function slugify(text) {
     .slice(0, 60);
 }
 
+// Supabase blocks requests using the secret key that look like they came from a
+// browser. Apps Script's default UrlFetchApp user agent trips that heuristic, so
+// every call explicitly overrides it with something clearly non-browser.
+const SERVER_USER_AGENT = 'AppsScript-ATLAS-CV-Import/1.0';
+
 function candidateAlreadyImported(url, key, messageId) {
   const resp = UrlFetchApp.fetch(
     url + '/rest/v1/candidates?source_email_id=eq.' + encodeURIComponent(messageId) + '&select=id',
     {
       method: 'get',
-      headers: { apikey: key, Authorization: 'Bearer ' + key },
+      headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT },
       muteHttpExceptions: true,
     }
   );
@@ -193,7 +198,7 @@ function candidateAlreadyImported(url, key, messageId) {
 function uploadToSupabaseStorage(url, key, path, blob) {
   const resp = UrlFetchApp.fetch(url + '/storage/v1/object/cvs/' + path, {
     method: 'post',
-    headers: { apikey: key, Authorization: 'Bearer ' + key },
+    headers: { apikey: key, Authorization: 'Bearer ' + key, 'User-Agent': SERVER_USER_AGENT },
     contentType: blob.getContentType(),
     payload: blob.getBytes(),
     muteHttpExceptions: true,
@@ -206,7 +211,7 @@ function uploadToSupabaseStorage(url, key, path, blob) {
 function insertCandidateRow(url, key, row) {
   const resp = UrlFetchApp.fetch(url + '/rest/v1/candidates', {
     method: 'post',
-    headers: { apikey: key, Authorization: 'Bearer ' + key, Prefer: 'return=minimal' },
+    headers: { apikey: key, Authorization: 'Bearer ' + key, Prefer: 'return=minimal', 'User-Agent': SERVER_USER_AGENT },
     contentType: 'application/json',
     payload: JSON.stringify(row),
     muteHttpExceptions: true,
