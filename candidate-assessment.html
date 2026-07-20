@@ -32,34 +32,12 @@
   }
   .group-card:hover { border-color: var(--accent); }
   .group-card .count { font-size: 13px; color: var(--muted); }
-  .bar-row { margin-bottom: 14px; }
-  .bar-label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
-  .bar-track { height: 10px; border-radius: 999px; background: var(--bg); overflow: hidden; display: flex; }
-  .bar-fill { height: 100%; }
-  .bar-fill.yes { background: var(--accent); }
-  .bar-fill.no { background: var(--muted); }
-  .chart-block { margin-bottom: 26px; }
-  .chart-block h3 { font-size: 13.5px; margin: 0 0 10px; color: var(--text); }
-  .chart-list { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .chart-list-row {
-    display: flex; justify-content: space-between; padding: 8px 12px; font-size: 13px;
-    border-bottom: 1px solid var(--border);
+  .assessment-table { border-collapse: collapse; width: 100%; font-size: 13px; white-space: nowrap; }
+  .assessment-table th, .assessment-table td {
+    border: 1px solid var(--border); padding: 9px 14px; text-align: left;
   }
-  .chart-list-row:last-child { border-bottom: none; }
-  .chart-list-row .value { font-weight: 600; }
-  .candidate-sheet {
-    border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 14px 16px; margin-bottom: 12px;
-  }
-  .candidate-sheet .name { font-weight: 700; font-size: 14.5px; }
-  .candidate-sheet .meta { color: var(--muted); font-size: 12px; margin: 2px 0 10px; }
-  .candidate-sheet .qa {
-    display: flex; justify-content: space-between; gap: 12px; font-size: 13px;
-    padding: 5px 0; border-top: 1px dashed var(--border);
-  }
-  .candidate-sheet .qa:first-of-type { border-top: none; }
-  .candidate-sheet .qa span:first-child { color: var(--muted); }
-  .candidate-sheet .qa span:last-child { font-weight: 600; text-align: right; }
+  .assessment-table th { background: var(--bg); font-weight: 700; color: var(--muted); }
+  .assessment-table td:first-child { color: var(--accent); font-weight: 600; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -110,70 +88,14 @@ function renderGroupList() {
   });
 }
 
-function pct(count, total) {
-  return total ? Math.round((count / total) * 100) : 0;
-}
-
-function bar(label, yes, no) {
-  const total = yes + no;
-  return `
-    <div class="bar-row">
-      <div class="bar-label"><span>${label}</span><span>${yes} yes · ${no} no</span></div>
-      <div class="bar-track">
-        <div class="bar-fill yes" style="width:${pct(yes, total)}%"></div>
-        <div class="bar-fill no" style="width:${pct(no, total)}%"></div>
-      </div>
-    </div>
-  `;
-}
-
-function countBy(answers, field) {
-  const counts = {};
-  answers.forEach((a) => {
-    const v = a[field] || '—';
-    counts[v] = (counts[v] || 0) + 1;
-  });
-  return counts;
-}
-
-function listChart(title, answers, field) {
-  return `
-    <div class="chart-block">
-      <h3>${title}</h3>
-      <div class="chart-list">
-        ${answers.map((a) => `
-          <div class="chart-list-row">
-            <span>${a.candidateName || a.candidateEmail}</span>
-            <span class="value">${a[field] || '—'}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function yesNoChart(title, answers, field) {
-  const yes = answers.filter((a) => a[field] === 'Yes').length;
-  const no = answers.filter((a) => a[field] === 'No').length;
-  return `<div class="chart-block"><h3>${title}</h3>${bar('', yes, no)}</div>`;
-}
-
-function breakdownChart(title, counts) {
-  const entries = Object.entries(counts);
-  if (!entries.length) return '';
-  const total = entries.reduce((sum, [, c]) => sum + c, 0);
-  return `
-    <div class="chart-block">
-      <h3>${title}</h3>
-      ${entries.map(([label, count]) => `
-        <div class="bar-row">
-          <div class="bar-label"><span>${label}</span><span>${count}</span></div>
-          <div class="bar-track"><div class="bar-fill yes" style="width:${pct(count, total)}%"></div></div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
+const ASSESSMENT_COLUMNS = [
+  { label: 'Candidate Name', get: (a) => a.candidateName || a.candidateEmail },
+  { label: 'Are you currently employed?', get: (a) => a.currentlyEmployed },
+  { label: 'If employed, notice period', get: (a) => (a.currentlyEmployed === 'Yes' ? (a.noticePeriod || '—') : 'N/A') },
+  { label: 'Expected monthly salary', get: (a) => a.expectedSalary },
+  { label: 'When can you join?', get: (a) => a.availableFrom },
+  { label: 'Willing to work in our office location?', get: (a) => a.willingLocation },
+];
 
 function renderGroupDetail(key, items) {
   const answers = items.map((i) => i.answers);
@@ -186,26 +108,18 @@ function renderGroupDetail(key, items) {
       <h2>${key}</h2>
       <p class="kpi-note" style="margin-top:-6px">${items.length} assessment${items.length > 1 ? 's' : ''} submitted</p>
 
-      ${yesNoChart('Are you currently employed?', answers, 'currentlyEmployed')}
-      ${breakdownChart('If employed, what is your notice period?', countBy(answers.filter((a) => a.currentlyEmployed === 'Yes'), 'noticePeriod'))}
-      ${listChart('What is your expected monthly salary?', answers, 'expectedSalary')}
-      ${listChart('When can you join?', answers, 'availableFrom')}
-      ${yesNoChart('Are you willing to work in our office location?', answers, 'willingLocation')}
-    </section>
-
-    <section class="panel">
-      <h2>Candidate Sheets</h2>
-      ${answers.map((a) => `
-        <div class="candidate-sheet">
-          <div class="name">${a.candidateName || a.candidateEmail}</div>
-          <div class="meta">${a.candidateEmail}</div>
-          <div class="qa"><span>Are you currently employed?</span><span>${a.currentlyEmployed}</span></div>
-          <div class="qa"><span>If employed, notice period</span><span>${a.currentlyEmployed === 'Yes' ? (a.noticePeriod || '—') : 'N/A'}</span></div>
-          <div class="qa"><span>Expected monthly salary</span><span>${a.expectedSalary}</span></div>
-          <div class="qa"><span>When can you join?</span><span>${a.availableFrom}</span></div>
-          <div class="qa"><span>Willing to work in our office location?</span><span>${a.willingLocation}</span></div>
-        </div>
-      `).join('')}
+      <div style="overflow-x:auto">
+        <table class="assessment-table">
+          <thead>
+            <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}</tr>
+          </thead>
+          <tbody>
+            ${answers.map((a) => `
+              <tr>${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}</tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
     </section>
   `;
 
