@@ -105,7 +105,6 @@ async function loadUnmatched() {
           ${requestOptions}
         </select>
         <button class="btn-primary assign-btn" style="padding:8px 14px;font-size:12.5px">Assign</button>
-        <span class="status hidden" style="margin-left:8px"></span>
       </div>
     `;
   }));
@@ -116,11 +115,8 @@ async function loadUnmatched() {
     const row = unmatchedList.querySelector(`.cv-row[data-id="${c.id}"]`);
     row.querySelector('.assign-btn').addEventListener('click', async () => {
       const select = row.querySelector('.assign-select');
-      const statusEl = row.querySelector('.status');
       const requestId = select.value;
       if (!requestId) return;
-
-      const matchedRequest = openRequests.find((r) => r.id === requestId);
 
       const { error: updateError } = await sb
         .from('candidates')
@@ -130,37 +126,6 @@ async function loadUnmatched() {
       if (updateError) {
         alert(updateError.message);
         return;
-      }
-
-      if (c.email && matchedRequest) {
-        const assessmentUrl = `${location.origin}/assessment.html?position=${encodeURIComponent(matchedRequest.designation)}&name=${encodeURIComponent(c.full_name || '')}&email=${encodeURIComponent(c.email)}`;
-        try {
-          const res = await fetch('/.netlify/functions/send-candidate-thankyou', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              candidateName: c.full_name,
-              candidateEmail: c.email,
-              designation: matchedRequest.designation,
-              companyName: matchedRequest.companies?.name,
-              assessmentUrl,
-            }),
-          });
-          if (!res.ok) {
-            const err = await res.json();
-            statusEl.textContent = `Assigned, but thank-you email failed: ${err.error || 'unknown error'}`;
-            statusEl.className = 'status error';
-            statusEl.classList.remove('hidden');
-            setTimeout(() => { row.remove(); loadFiled(); }, 3000);
-            return;
-          }
-        } catch (emailErr) {
-          statusEl.textContent = `Assigned, but thank-you email failed: ${emailErr.message}`;
-          statusEl.className = 'status error';
-          statusEl.classList.remove('hidden');
-          setTimeout(() => { row.remove(); loadFiled(); }, 3000);
-          return;
-        }
       }
 
       row.remove();

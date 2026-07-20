@@ -21,6 +21,7 @@
 
 const CV_LABEL_NAME = 'ATLAS-Filed';
 const SEARCH_QUERY = 'to:hra@esilkroute.com.lk has:attachment newer_than:3d -label:' + CV_LABEL_NAME;
+const APP_BASE_URL = 'https://atlas-recruiter.netlify.app';
 
 function importCvsFromGmail() {
   const props = PropertiesService.getScriptProperties();
@@ -78,6 +79,12 @@ function importCvsFromGmail() {
         source_subject: subject,
       });
 
+      // Best-effort designation guess for the immediate acknowledgement email only —
+      // this is NOT treated as a confirmed match; the candidate still lands in the
+      // Unmatched queue for HR to properly assign to a real open position.
+      const designationGuess = extractDesignationFromSubject(subject);
+      sendThankYouEmail(senderEmail, senderName, designationGuess);
+
       thread.addLabel(label);
       imported++;
     });
@@ -114,6 +121,40 @@ function extensionForMimeType(mimeType) {
   if (mimeType === 'application/msword') return 'doc';
   if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
   return 'bin';
+}
+
+function extractDesignationFromSubject(subject) {
+  let s = subject.trim();
+  const prefixes = [
+    /^cv\s+submission\s+for\s+/i,
+    /^cv\s+for\s+/i,
+    /^application\s+for\s+/i,
+    /^job\s+application\s+for\s+/i,
+    /^re:\s*/i,
+  ];
+  prefixes.forEach((p) => { s = s.replace(p, ''); });
+  // Trim a trailing " - Candidate Name" style suffix some subjects include.
+  s = s.replace(/\s*[-–—]\s*[A-Z][a-zA-Z.'\s]{2,40}$/, '');
+  return s.trim() || 'the position you applied for';
+}
+
+function sendThankYouEmail(email, name, designationGuess) {
+  if (!email) return;
+  const assessmentUrl = APP_BASE_URL + '/assessment.html?position=' + encodeURIComponent(designationGuess) +
+    '&name=' + encodeURIComponent(name || '') + '&email=' + encodeURIComponent(email);
+
+  const body =
+    'Dear ' + (name || 'Applicant') + ',\n\n' +
+    'Thank you for applying for the position of ' + designationGuess + ' at our organization.\n\n' +
+    'We have successfully received your application.\n\n' +
+    'As the next step, please complete our short Candidate Assessment Form using the link below:\n' +
+    assessmentUrl + '\n\n' +
+    'This information helps us process your application faster.\n\n' +
+    'Thank you again for your interest in joining our team.\n\n' +
+    'Kind Regards\n' +
+    'Human Resources';
+
+  MailApp.sendEmail({ to: email, subject: 'Thank You for Applying', body: body });
 }
 
 function extractSenderName(from) {
