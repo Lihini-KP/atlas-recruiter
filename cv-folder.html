@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CV Folder — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>CV Folder</h1>
+    <p>CVs emailed to hra@esilkroute.com.lk are imported hourly and land here until assigned to a position.</p>
+  </div>
+</header>
+
+<main>
+  <section class="panel" id="unmatched-panel">
+    <h2>Unmatched — needs review</h2>
+    <div id="unmatched-list"><p class="kpi-note">Loading…</p></div>
+  </section>
+
+  <section class="panel" id="filed-panel">
+    <h2>Filed by position</h2>
+    <div id="filed-list"><p class="kpi-note">Loading…</p></div>
+  </section>
+</main>
+
+<style>
+  .cv-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0; border-bottom: 1px solid var(--border);
+  }
+  .cv-row:last-child { border-bottom: none; }
+  .cv-row .cv-info { flex: 1; }
+  .cv-row .cv-name { font-size: 14px; font-weight: 600; }
+  .cv-row .cv-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cv-row select { max-width: 260px; }
+  .folder-group { margin-bottom: 18px; }
+  .folder-group h3 { font-size: 14px; margin: 0 0 8px; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+const unmatchedList = document.getElementById('unmatched-list');
+const filedList = document.getElementById('filed-list');
+let openRequests = [];
+
+async function cvSignedUrl(path) {
+  if (!path) return '#';
+  const { data } = await sb.storage.from('cvs').createSignedUrl(path, 3600);
+  return data?.signedUrl || '#';
+}
+
+async function loadOpenRequests() {
+  const { data, error } = await sb
+    .from('recruitment_requests')
+    .select('id, designation, department, companies(name)')
+    .eq('status', 'approved')
+    .order('designation');
+  if (error) return [];
+  return data;
+}
+
+async function loadUnmatched() {
+  const { data, error } = await sb
+    .from('candidates')
+    .select('*')
+    .eq('status', 'unmatched')
+    .order('applied_at', { ascending: false });
+
+  if (error) {
+    unmatchedList.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  if (!data.length) {
+    unmatchedList.innerHTML = '<p class="kpi-note">Nothing waiting on review.</p>';
+    return;
+  }
+
+  const requestOptions = openRequests
+    .map((r) => `<option value="${r.id}">${r.designation} — ${r.companies?.name || ''} (${r.department})</option>`)
+    .join('');
+
+  const rows = await Promise.all(data.map(async (c) => {
+    const url = await cvSignedUrl(c.cv_storage_path);
+    return `
+      <div class="cv-row" data-id="${c.id}">
+        <div class="cv-info">
+          <div class="cv-name">${c.full_name || c.email || 'Unknown sender'}</div>
+          <div class="cv-meta">${c.email || ''} · ${c.source_subject || ''} · ${new Date(c.applied_at).toLocaleString()}</div>
+        </div>
+        <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
+        <select class="assign-select">
+          <option value="">Assign to position…</option>
+          ${requestOptions}
+        </select>
+        <button class="btn-primary assign-btn" style="padding:8px 14px;font-size:12.5px">Assign</button>
+      </div>
+    `;
+  }));
+
+  unmatchedList.innerHTML = rows.join('');
+
+  unmatchedList.querySelectorAll('.cv-row').forEach((row) => {
+    row.querySelector('.assign-btn').addEventListener('click', async () => {
+      const select = row.querySelector('.assign-select');
+      const requestId = select.value;
+      if (!requestId) return;
+
+      const { error: updateError } = await sb
+        .from('candidates')
+        .update({ recruitment_request_id: requestId, status: 'applied' })
+        .eq('id', row.dataset.id);
+
+      if (updateError) {
+        alert(updateError.message);
+        return;
+      }
+      row.remove();
+      loadFiled();
+      if (!unmatchedList.querySelector('.cv-row')) unmatchedList.innerHTML = '<p class="kpi-note">Nothing waiting on review.</p>';
+    });
+  });
+}
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+async function loadFiled() {
+  const { data, error } = await sb
+    .from('candidates')
+    .select('*, recruitment_requests(designation, department, companies(name))')
+    .neq('status', 'unmatched')
+    .order('applied_at', { ascending: false });
+
+  if (error) {
+    filedList.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  if (!data.length) {
+    filedList.innerHTML = '<p class="kpi-note">No candidates filed yet.</p>';
+    return;
+  }
+
+  const groups = groupBy(data, (c) => {
+    const r = c.recruitment_requests;
+    return r ? `${r.companies?.name || '—'} / ${r.department} / ${r.designation}` : 'Unassigned';
+  });
+
+  const sections = await Promise.all(Array.from(groups.entries()).map(async ([groupKey, candidates]) => {
+    const rows = await Promise.all(candidates.map(async (c) => {
+      const url = await cvSignedUrl(c.cv_storage_path);
+      return `
+        <div class="cv-row">
+          <div class="cv-info">
+            <div class="cv-name">${c.full_name || c.email || 'Unknown'}</div>
+            <div class="cv-meta">${c.email || ''} · Status: ${c.status} · ${new Date(c.applied_at).toLocaleDateString()}</div>
+          </div>
+          <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
+        </div>
+      `;
+    }));
+    return `<div class="folder-group"><h3>${groupKey}</h3>${rows.join('')}</div>`;
+  }));
+
+  filedList.innerHTML = sections.join('');
+}
+
+window.authReady.then(async (profile) => {
+  if (!profile) return;
+  renderSidebar('cv-folder.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    unmatchedList.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    filedList.innerHTML = '';
+    return;
+  }
+  openRequests = await loadOpenRequests();
+  await Promise.all([loadUnmatched(), loadFiled()]);
+});
+</script>
+
+</body>
+</html>
