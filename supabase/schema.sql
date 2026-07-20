@@ -340,3 +340,14 @@ create policy "hr admin can update cvs bucket"
   on storage.objects for update
   using (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'))
   with check (bucket_id = 'cvs' and public.current_user_role() in ('hr', 'admin'));
+
+-- ── Candidate Assessment summary view ────────────────────────────────────────
+grant select, insert on public.assessments to authenticated;
+
+create policy "assessments readable by hr, admin"
+  on assessments for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "assessments insertable by hr, admin"
+  on assessments for insert
+  with check (current_user_role() in ('hr', 'admin'));
