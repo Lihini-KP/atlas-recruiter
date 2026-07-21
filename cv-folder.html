@@ -39,21 +39,32 @@
   }
   .cv-row:last-child { border-bottom: none; }
   .cv-row .cv-info { flex: 1; }
-  .cv-row .cv-name { font-size: 14px; font-weight: 600; }
-  .cv-row .cv-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .cv-row .cv-name { font-size: 13px; font-weight: 600; }
+  .cv-row .cv-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .cv-row select { max-width: 220px; }
   .folder-group { margin-bottom: 18px; }
-  .folder-group h3 { font-size: 14px; margin: 0 0 8px; }
+  .folder-group h3 {
+    font-size: 11px; margin: 0 0 10px; padding: 6px 10px; background: var(--bg); border-radius: 6px;
+    color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em;
+  }
   .new-folder-inline { display: none; gap: 8px; align-items: center; }
-  .new-folder-inline select, .new-folder-inline input { max-width: 170px; font-size: 12.5px; padding: 6px 8px; }
-  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 10px; }
+  .new-folder-inline select, .new-folder-inline input { max-width: 170px; font-size: 12px; padding: 6px 8px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 10px; }
   .tile {
-    border-radius: 14px; padding: 18px; cursor: pointer; border: 2px solid var(--border); background: var(--bg);
+    position: relative;
+    border-radius: 12px; padding: 14px; cursor: pointer; border: 2px solid var(--border); background: var(--bg);
     transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
   .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
-  .tile .tile-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
-  .tile .tile-count { font-size: 12px; color: var(--muted); }
+  .tile .tile-name { font-weight: 700; font-size: 12.5px; margin-bottom: 4px; padding-right: 20px; }
+  .tile .tile-count { font-size: 11px; color: var(--muted); }
+  .tile-delete-btn {
+    position: absolute; top: 8px; right: 8px; z-index: 2;
+    width: 20px; height: 20px; padding: 0; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    font-size: 10px; line-height: 1; cursor: pointer;
+  }
+  .tile-delete-btn:hover { background: #dc2626; border-color: #dc2626; color: white; }
   .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
   .crumb-nav a { color: var(--accent); cursor: pointer; text-decoration: none; }
   .crumb-nav a:hover { text-decoration: underline; }
@@ -300,20 +311,64 @@ function filedGroupKey(c) {
 
 function renderFiledTiles() {
   const groups = groupBy(filedCandidates, filedGroupKey);
+  const isAdmin = window.currentProfile?.role === 'admin';
 
   filedList.innerHTML = `
     <div class="tile-grid">
-      ${Array.from(groups.entries()).map(([groupKey, items]) => `
+      ${Array.from(groups.entries()).map(([groupKey, items]) => {
+        const manualFolderId = items[0].manual_folder_id;
+        const canDelete = isAdmin && manualFolderId;
+        return `
         <div class="tile" data-group="${encodeURIComponent(groupKey)}">
+          ${canDelete ? `<button type="button" class="tile-delete-btn" data-folder-id="${manualFolderId}" data-group="${encodeURIComponent(groupKey)}" title="Delete this folder and all its candidate data">✕</button>` : ''}
           <div class="tile-name">${groupKey}</div>
           <div class="tile-count">${items.length} candidate${items.length === 1 ? '' : 's'}</div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
     </div>
   `;
 
   filedList.querySelectorAll('.tile[data-group]').forEach((tile) => {
-    tile.addEventListener('click', () => renderFiledRows(decodeURIComponent(tile.dataset.group)));
+    tile.addEventListener('click', (e) => {
+      if (e.target.closest('.tile-delete-btn')) return;
+      renderFiledRows(decodeURIComponent(tile.dataset.group));
+    });
+  });
+
+  filedList.querySelectorAll('.tile-delete-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const folderId = btn.dataset.folderId;
+      const groupKey = decodeURIComponent(btn.dataset.group);
+      const items = filedCandidates.filter((c) => filedGroupKey(c) === groupKey);
+
+      const confirmed = confirm(
+        `Delete "${groupKey}"?\n\nThis will PERMANENTLY delete ${items.length} candidate(s) and all their assessment, interview, and offer records. This cannot be undone.`
+      );
+      if (!confirmed) return;
+
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const candidateIds = items.map((c) => c.id);
+      const { error: interviewsError } = await sb.from('interviews').delete().in('candidate_id', candidateIds);
+      const { error: offersError } = await sb.from('offers').delete().in('candidate_id', candidateIds);
+      const { error: assessmentsError } = await sb.from('assessments').delete().in('candidate_id', candidateIds);
+      const { error: candidatesError } = await sb.from('candidates').delete().in('id', candidateIds);
+      const { error: folderError } = await sb.from('manual_folders').delete().eq('id', folderId);
+
+      const firstError = interviewsError || offersError || assessmentsError || candidatesError || folderError;
+      if (firstError) {
+        alert('Delete failed: ' + firstError.message);
+        btn.disabled = false;
+        btn.textContent = '✕';
+        return;
+      }
+
+      manualFolders = await loadManualFolders();
+      await loadFiled();
+    });
   });
 }
 

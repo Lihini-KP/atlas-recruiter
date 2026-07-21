@@ -5,34 +5,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Sign In — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  html, body { height: 100%; }
+  body.login-body {
+    margin: 0; font-family: 'Sora', Arial, sans-serif;
+    display: flex; min-height: 100vh; background: #0a0a0f;
+  }
+  .login-brand-panel {
+    flex: 1.1; display: flex; flex-direction: column; justify-content: center;
+    padding: 60px; background: radial-gradient(circle at 15% 20%, rgba(129,140,248,0.18), transparent 55%), #0a0a0f;
+    color: #fff; position: relative; overflow: hidden;
+  }
+  .login-brand-panel::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 85%, rgba(129,140,248,0.12), transparent 50%);
+    pointer-events: none;
+  }
+  .login-eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+    color: #818cf8; margin-bottom: 14px;
+  }
+  .login-brand-panel h1 { font-size: 34px; font-weight: 800; margin: 0 0 14px; letter-spacing: -0.02em; line-height: 1.15; }
+  .login-brand-panel p.tagline { font-size: 14.5px; color: rgba(255,255,255,0.6); max-width: 400px; line-height: 1.6; margin: 0 0 40px; }
+  .login-logo-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .login-logo-chip {
+    background: #ffffff; border-radius: 12px; padding: 12px 16px;
+    display: flex; align-items: center; box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .login-logo-chip img { height: 28px; max-width: 120px; object-fit: contain; display: block; }
+  .login-form-panel {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: var(--bg); padding: 40px;
+  }
+  .login-card {
+    width: 100%; max-width: 360px; background: var(--panel); border: 1px solid var(--border);
+    border-radius: 16px; padding: 34px 32px; box-shadow: 0 8px 32px rgba(16,24,40,0.08);
+  }
+  .login-card h2 { margin: 0 0 4px; font-size: 19px; font-weight: 700; }
+  .login-card .login-sub { margin: 0 0 24px; font-size: 12.5px; color: var(--muted); }
+  .login-card .field { margin-bottom: 16px; }
+  .login-card .actions { margin-top: 22px; }
+  .login-card button[type="submit"] { width: 100%; }
+  @media (max-width: 860px) {
+    body.login-body { flex-direction: column; }
+    .login-brand-panel { padding: 40px 32px 32px; flex: none; }
+    .login-brand-panel h1 { font-size: 26px; }
+    .login-form-panel { flex: none; padding: 32px; }
+  }
+</style>
 </head>
-<body>
+<body class="login-body">
 
-<header>
-  <div class="brand">
-    <h1>Alex — Recruitment Coordinator</h1>
-    <p>ATLAS Recruitment Agent</p>
+<div class="login-brand-panel">
+  <div class="login-eyebrow">ATLAS Recruitment Agent</div>
+  <h1>Alex — Recruitment Coordinator</h1>
+  <p class="tagline">The recruitment workspace for Silk Route Ventures, Silk Food Ceylon, and Ancient Nutraceuticals — from job requests to offer letters, in one place.</p>
+  <div class="login-logo-row">
+    <div class="login-logo-chip"><img src="assets/logos/SFC-logo.png" alt="Silk Food Ceylon" /></div>
+    <div class="login-logo-chip"><img src="assets/logos/SRV-logo.png" alt="Silk Route Ventures" /></div>
+    <div class="login-logo-chip"><img src="assets/logos/AN-logo.png" alt="Ancient Nutraceuticals" /></div>
   </div>
-</header>
+</div>
 
-<main style="max-width: 380px;">
-  <section class="panel">
+<div class="login-form-panel">
+  <div class="login-card">
     <h2>Sign In</h2>
+    <p class="login-sub">Enter your name and password to continue.</p>
     <form id="login-form">
-      <div class="grid" style="grid-template-columns: 1fr;">
-        <div class="field"><label>Name *</label><select name="name" id="name-select" required></select></div>
-        <div class="field"><label>Password *</label><input name="password" type="password" required autocomplete="current-password" /></div>
-      </div>
+      <div class="field"><label>Name *</label><select name="name" id="name-select" required></select></div>
+      <div class="field"><label>Password *</label><input name="password" type="password" required autocomplete="current-password" /></div>
       <div class="actions">
         <button type="submit" class="btn-primary" id="login-btn">Sign In</button>
       </div>
       <div class="status hidden" id="login-status"></div>
     </form>
-  </section>
-</main>
+  </div>
+</div>
 
 <script src="lib/supabase-client.js"></script>
 <script>

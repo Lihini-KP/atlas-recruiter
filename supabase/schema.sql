@@ -417,3 +417,59 @@ create policy "manual_folders readable by hr, admin"
 create policy "manual_folders insertable by hr, admin"
   on manual_folders for insert
   with check (current_user_role() in ('hr', 'admin'));
+
+-- ── Admin-only folder deletion: cascade-deletes a manual folder's candidates and
+-- their assessment/interview/offer records in one action. Enforced in Postgres (not
+-- just hidden in the UI), so these tables get RLS enabled for the first time here —
+-- matching hr/admin policies are added alongside so existing read/write behavior for
+-- the app pages and the CV-import bot account (role 'hr') keeps working unchanged.
+alter table candidates enable row level security;
+
+create policy "candidates readable by hr, admin"
+  on candidates for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "candidates insertable by hr, admin"
+  on candidates for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "candidates updatable by hr, admin"
+  on candidates for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "candidates deletable by admin only"
+  on candidates for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.candidates to authenticated;
+
+alter table assessments enable row level security;
+
+create policy "assessments deletable by admin only"
+  on assessments for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.assessments to authenticated;
+
+alter table interviews enable row level security;
+
+create policy "interviews deletable by admin only"
+  on interviews for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.interviews to authenticated;
+
+alter table offers enable row level security;
+
+create policy "offers deletable by admin only"
+  on offers for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.offers to authenticated;
+
+create policy "manual_folders deletable by admin only"
+  on manual_folders for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.manual_folders to authenticated;

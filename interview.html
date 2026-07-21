@@ -31,23 +31,28 @@
   .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
   .crumb-nav a:hover { text-decoration: underline; }
 
-  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
   .tile {
-    border-radius: 14px; padding: 22px 20px; cursor: pointer; border: 2px solid transparent;
+    border-radius: 12px; padding: 15px 14px; cursor: pointer; border: 2px solid transparent;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
   .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
-  .tile .tile-icon { font-size: 26px; margin-bottom: 10px; }
-  .tile .tile-logo { height: 44px; max-width: 100%; object-fit: contain; object-position: left; margin-bottom: 12px; display: block; }
-  .tile .tile-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
-  .tile .tile-count { font-size: 12.5px; opacity: 0.8; }
+  .tile .tile-icon { font-size: 20px; margin-bottom: 8px; }
+  .tile .tile-logo { height: 32px; max-width: 100%; object-fit: contain; object-position: left; margin-bottom: 9px; display: block; }
+  .tile .tile-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .tile .tile-count { font-size: 11px; opacity: 0.8; }
 
-  .interview-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12.5px; }
+  .interview-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 11.5px; }
   .interview-table th, .interview-table td {
-    border: 1px solid var(--border); padding: 10px 14px; text-align: left;
+    border-bottom: 1px solid var(--border); padding: 9px 12px; text-align: left;
     overflow-wrap: break-word; vertical-align: top; line-height: 1.45;
   }
-  .interview-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; }
+  .interview-table th {
+    background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 0.03em; border-top: 1px solid var(--border);
+  }
+  .interview-table tbody tr:nth-child(even) td { background: rgba(120,120,140,0.045); }
+  .interview-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
   .interview-table td:first-child { font-weight: 600; }
   .interview-table th:nth-child(1), .interview-table td:nth-child(1) { width: 20%; }
   .interview-table th:nth-child(2), .interview-table td:nth-child(2) { width: 14%; }
