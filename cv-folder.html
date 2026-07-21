@@ -315,17 +315,13 @@ function renderFiledTiles() {
 
   filedList.innerHTML = `
     <div class="tile-grid">
-      ${Array.from(groups.entries()).map(([groupKey, items]) => {
-        const manualFolderId = items[0].manual_folder_id;
-        const canDelete = isAdmin && manualFolderId;
-        return `
+      ${Array.from(groups.entries()).map(([groupKey, items]) => `
         <div class="tile" data-group="${encodeURIComponent(groupKey)}">
-          ${canDelete ? `<button type="button" class="tile-delete-btn" data-folder-id="${manualFolderId}" data-group="${encodeURIComponent(groupKey)}" title="Delete this folder and all its candidate data">✕</button>` : ''}
+          ${isAdmin ? `<button type="button" class="tile-delete-btn" data-group="${encodeURIComponent(groupKey)}" title="Delete this folder's candidates and all their data">✕</button>` : ''}
           <div class="tile-name">${groupKey}</div>
           <div class="tile-count">${items.length} candidate${items.length === 1 ? '' : 's'}</div>
         </div>
-      `;
-      }).join('')}
+      `).join('')}
     </div>
   `;
 
@@ -339,12 +335,16 @@ function renderFiledTiles() {
   filedList.querySelectorAll('.tile-delete-btn').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.stopPropagation();
-      const folderId = btn.dataset.folderId;
       const groupKey = decodeURIComponent(btn.dataset.group);
       const items = filedCandidates.filter((c) => filedGroupKey(c) === groupKey);
+      const manualFolderId = items[0].manual_folder_id;
+      const isRealPosition = !!items[0].recruitment_request_id;
 
+      const positionNote = isRealPosition
+        ? '\n\nThe open position itself will NOT be deleted — only these candidates and their data.'
+        : '';
       const confirmed = confirm(
-        `Delete "${groupKey}"?\n\nThis will PERMANENTLY delete ${items.length} candidate(s) and all their assessment, interview, and offer records. This cannot be undone.`
+        `Delete "${groupKey}"?\n\nThis will PERMANENTLY delete ${items.length} candidate(s) and all their assessment, interview, and offer records. This cannot be undone.${positionNote}`
       );
       if (!confirmed) return;
 
@@ -356,7 +356,9 @@ function renderFiledTiles() {
       const { error: offersError } = await sb.from('offers').delete().in('candidate_id', candidateIds);
       const { error: assessmentsError } = await sb.from('assessments').delete().in('candidate_id', candidateIds);
       const { error: candidatesError } = await sb.from('candidates').delete().in('id', candidateIds);
-      const { error: folderError } = await sb.from('manual_folders').delete().eq('id', folderId);
+      const { error: folderError } = manualFolderId
+        ? await sb.from('manual_folders').delete().eq('id', manualFolderId)
+        : { error: null };
 
       const firstError = interviewsError || offersError || assessmentsError || candidatesError || folderError;
       if (firstError) {
