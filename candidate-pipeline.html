@@ -97,6 +97,10 @@ function companyOf(candidate) {
   return candidate.recruitment_requests?.companies?.name || 'Unassigned';
 }
 
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
 function renderCrumbs(parts) {
   return `<div class="crumb-nav">${parts.map((p, i) => {
     const isLast = i === parts.length - 1;
@@ -128,7 +132,34 @@ function renderCompanyList() {
   `;
 
   main.querySelectorAll('.tile[data-company]').forEach((tile) => {
-    tile.addEventListener('click', () => renderCompanyPipeline(decodeURIComponent(tile.dataset.company), groups.get(decodeURIComponent(tile.dataset.company)) || []));
+    tile.addEventListener('click', () => renderDesignationList(decodeURIComponent(tile.dataset.company), groups.get(decodeURIComponent(tile.dataset.company)) || []));
+  });
+}
+
+function renderDesignationList(companyName, companyCandidates) {
+  pageSubtitle.textContent = `${companyName} · choose a position to view its shortlisted candidates.`;
+  const s = companyStyleFor(companyName);
+  const groups = groupBy(companyCandidates, designationOf);
+
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${groups.size ? `
+      <div class="tile-grid">
+        ${Array.from(groups.entries()).map(([designation, items]) => `
+          <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-icon">📌</div>
+            <div class="tile-name">${designation}</div>
+            <div class="tile-count">${items.length} shortlisted</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<p class="kpi-note">No shortlisted candidates for this company yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  main.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    const designation = decodeURIComponent(tile.dataset.designation);
+    tile.addEventListener('click', () => renderCompanyPipeline(companyName, designation, groups.get(designation) || []));
   });
 }
 
@@ -319,11 +350,16 @@ function bindRow(candidate) {
   }
 }
 
-function renderCompanyPipeline(companyName, candidates) {
-  pageSubtitle.textContent = `${companyName} · shortlisted candidates`;
+function renderCompanyPipeline(companyName, designation, candidates) {
+  pageSubtitle.textContent = `${companyName} · ${designation}`;
 
   main.innerHTML = `
-    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${renderCrumbs([
+      { label: 'Companies', nav: 'companies' },
+      { label: companyName, nav: 'company', company: companyName },
+      { label: designation },
+    ])}
+    <h2 style="margin:0 0 14px">${designation}</h2>
     ${candidates.length ? `
       <section class="panel">
         <table class="pipeline-table">
@@ -349,6 +385,13 @@ function renderCompanyPipeline(companyName, candidates) {
   `;
 
   main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  const companyCrumb = main.querySelector('[data-nav="company"]');
+  if (companyCrumb) {
+    companyCrumb.addEventListener('click', () => {
+      const companyCandidates = allCandidates.filter((c) => companyOf(c) === companyName);
+      renderDesignationList(companyName, companyCandidates);
+    });
+  }
   candidates.forEach(bindRow);
 }
 
