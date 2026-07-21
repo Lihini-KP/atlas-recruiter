@@ -53,6 +53,7 @@
 const main = document.getElementById('main-content');
 const pageSubtitle = document.getElementById('page-subtitle');
 let allAssessments = [];
+let allCompanies = [];
 
 const COMPANY_STYLES = {
   'Silk Food Ceylon (Pvt) Ltd': { bg: '#e8f5e9', border: '#2e7d32', text: '#1b5e20' },
@@ -98,19 +99,20 @@ function renderCompanyList() {
   pageSubtitle.textContent = 'Choose a company to see its open positions and assessment results.';
   const groups = groupBy(allAssessments, (a) => companyOf(a.candidates));
 
-  if (!groups.size) {
-    main.innerHTML = '<p class="kpi-note">No assessments submitted yet.</p>';
-    return;
-  }
+  // Always show every company as a tile, even with zero assessments so far —
+  // "Unassigned" only appears if there's actually unmatched data to show.
+  const names = allCompanies.map((c) => c.name);
+  if (groups.has('Unassigned')) names.push('Unassigned');
 
   main.innerHTML = `
     <div class="tile-grid">
-      ${Array.from(groups.entries()).map(([name, items]) => {
+      ${names.map((name) => {
+        const count = (groups.get(name) || []).length;
         const s = companyStyleFor(name);
         return `
           <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
             <div class="tile-name">${name}</div>
-            <div class="tile-count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
+            <div class="tile-count">${count} assessment${count === 1 ? '' : 's'}</div>
           </div>
         `;
       }).join('')}
@@ -130,14 +132,16 @@ function renderDesignationList(companyName) {
 
   main.innerHTML = `
     ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
-    <div class="tile-grid">
-      ${Array.from(groups.entries()).map(([designation, items]) => `
-        <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
-          <div class="tile-name">${designation}</div>
-          <div class="tile-count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
-        </div>
-      `).join('')}
-    </div>
+    ${groups.size ? `
+      <div class="tile-grid">
+        ${Array.from(groups.entries()).map(([designation, items]) => `
+          <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-name">${designation}</div>
+            <div class="tile-count">${items.length} assessment${items.length > 1 ? 's' : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<p class="kpi-note">No assessments submitted for this company yet.</p>'}
   `;
 
   bindCrumbs();
@@ -189,17 +193,25 @@ function renderAssessmentTable(companyName, designation, items) {
 }
 
 async function loadAssessments() {
-  const { data, error } = await sb
-    .from('assessments')
-    .select('answers, submitted_at, candidates(full_name, source_subject, recruitment_requests(designation, companies(name)))')
-    .order('submitted_at', { ascending: false });
+  const [companiesRes, assessmentsRes] = await Promise.all([
+    sb.from('companies').select('id, name').order('name'),
+    sb
+      .from('assessments')
+      .select('answers, submitted_at, candidates(full_name, source_subject, recruitment_requests(designation, companies(name)))')
+      .order('submitted_at', { ascending: false }),
+  ]);
 
-  if (error) {
-    main.innerHTML = `<div class="status error">${error.message}</div>`;
+  if (companiesRes.error) {
+    main.innerHTML = `<div class="status error">${companiesRes.error.message}</div>`;
+    return;
+  }
+  if (assessmentsRes.error) {
+    main.innerHTML = `<div class="status error">${assessmentsRes.error.message}</div>`;
     return;
   }
 
-  allAssessments = data;
+  allCompanies = companiesRes.data;
+  allAssessments = assessmentsRes.data;
   renderCompanyList();
 }
 
