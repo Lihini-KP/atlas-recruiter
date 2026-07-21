@@ -24,39 +24,202 @@
   <section class="panel">
     <h2>Overview</h2>
     <div class="kpi-grid" id="kpi-grid">
-      <div class="kpi-tile"><div class="value" id="kpi-total-vacancies">—</div><div class="label">Total Vacancies</div></div>
-      <div class="kpi-tile"><div class="value" id="kpi-active-recruitments">—</div><div class="label">Active Recruitments</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Applications Received</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Candidates Awaiting Review</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Shortlisted Candidates</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Interviews Scheduled</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Offers Sent</div></div>
-      <div class="kpi-tile"><div class="value">—</div><div class="label">Positions Filled</div></div>
+      <div class="kpi-tile" data-metric="total-vacancies"><div class="value">—</div><div class="label">Total Vacancies</div></div>
+      <div class="kpi-tile" data-metric="active-recruitments"><div class="value">—</div><div class="label">Active Recruitments</div></div>
+      <div class="kpi-tile" data-metric="applications-received"><div class="value">—</div><div class="label">Applications Received</div></div>
+      <div class="kpi-tile" data-metric="awaiting-review"><div class="value">—</div><div class="label">Candidates Awaiting Review</div></div>
+      <div class="kpi-tile" data-metric="shortlisted"><div class="value">—</div><div class="label">Shortlisted Candidates</div></div>
+      <div class="kpi-tile" data-metric="interviews-scheduled"><div class="value">—</div><div class="label">Interviews Scheduled</div></div>
+      <div class="kpi-tile" data-metric="offers-sent"><div class="value">—</div><div class="label">Offers Sent</div></div>
+      <div class="kpi-tile" data-metric="positions-filled"><div class="value">—</div><div class="label">Positions Filled</div></div>
     </div>
-    <p class="kpi-note">Total Vacancies and Active Recruitments are live from Supabase. The rest stay
-    placeholders until the candidate pipeline (Phase 2–5) exists.</p>
+    <p class="kpi-note">Click a tile to see the breakdown behind that number.</p>
+  </section>
+
+  <section class="panel hidden" id="detail-panel">
+    <h2 id="detail-title">Details</h2>
+    <div id="detail-body"></div>
   </section>
 </main>
+
+<style>
+  .kpi-tile { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease; }
+  .kpi-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); border-color: var(--accent); }
+  .kpi-tile.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+  .detail-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .detail-table th, .detail-table td { border-bottom: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+  .detail-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .detail-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
+</style>
 
 <script src="lib/supabase-client.js"></script>
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
 <script>
+const detailPanel = document.getElementById('detail-panel');
+const detailTitle = document.getElementById('detail-title');
+const detailBody = document.getElementById('detail-body');
+
+let requests = [];
+let candidates = [];
+let interviews = [];
+let offers = [];
+
+function companyOf(c) {
+  return c.recruitment_requests?.companies?.name || c.manual_folders?.companies?.name || 'Unassigned';
+}
+function designationOf(c) {
+  return c.recruitment_requests?.designation || c.manual_folders?.designation || (c.source_subject || c.full_name || 'Unknown');
+}
+
+function renderTable(columns, rows) {
+  if (!rows.length) return '<p class="kpi-note">Nothing here yet.</p>';
+  return `
+    <table class="detail-table">
+      <thead><tr>${columns.map((c) => `<th>${c.label}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map((r) => `<tr>${columns.map((c) => `<td>${c.get(r) ?? '—'}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>
+  `;
+}
+
+const METRICS = {
+  'total-vacancies': {
+    title: 'Total Vacancies — by open position',
+    value: () => requests.reduce((sum, r) => sum + (r.vacancies || 0), 0),
+    render: () => renderTable(
+      [
+        { label: 'Company', get: (r) => r.companies?.name },
+        { label: 'Designation', get: (r) => r.designation },
+        { label: 'Vacancies', get: (r) => r.vacancies },
+        { label: 'Status', get: (r) => r.status },
+      ],
+      requests
+    ),
+  },
+  'active-recruitments': {
+    title: 'Active Recruitments — pending approval or approved',
+    value: () => requests.filter((r) => ['pending_approval', 'approved'].includes(r.status)).length,
+    render: () => renderTable(
+      [
+        { label: 'Company', get: (r) => r.companies?.name },
+        { label: 'Designation', get: (r) => r.designation },
+        { label: 'Status', get: (r) => r.status },
+      ],
+      requests.filter((r) => ['pending_approval', 'approved'].includes(r.status))
+    ),
+  },
+  'applications-received': {
+    title: 'Applications Received — every CV/application on file',
+    value: () => candidates.length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (c) => c.full_name || c.email },
+        { label: 'Company / Position', get: (c) => `${companyOf(c)} / ${designationOf(c)}` },
+        { label: 'Status', get: (c) => c.status },
+        { label: 'Applied', get: (c) => new Date(c.applied_at).toLocaleDateString() },
+      ],
+      candidates
+    ),
+  },
+  'awaiting-review': {
+    title: 'Candidates Awaiting Review — unmatched CVs',
+    value: () => candidates.filter((c) => c.status === 'unmatched').length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (c) => c.full_name || c.email },
+        { label: 'Email', get: (c) => c.email },
+        { label: 'Applied', get: (c) => new Date(c.applied_at).toLocaleDateString() },
+      ],
+      candidates.filter((c) => c.status === 'unmatched')
+    ),
+  },
+  'shortlisted': {
+    title: 'Shortlisted Candidates',
+    value: () => candidates.filter((c) => c.status === 'shortlisted').length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (c) => c.full_name || c.email },
+        { label: 'Company / Position', get: (c) => `${companyOf(c)} / ${designationOf(c)}` },
+      ],
+      candidates.filter((c) => c.status === 'shortlisted')
+    ),
+  },
+  'interviews-scheduled': {
+    title: 'Interviews Scheduled',
+    value: () => interviews.length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (i) => i.candidates?.full_name },
+        { label: 'Date', get: (i) => i.scheduled_date },
+        { label: 'Time', get: (i) => i.scheduled_time },
+      ],
+      interviews
+    ),
+  },
+  'offers-sent': {
+    title: 'Offers Sent',
+    value: () => offers.filter((o) => o.sent_at).length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (o) => o.candidates?.full_name },
+        { label: 'Salary', get: (o) => o.salary },
+        { label: 'Joining Date', get: (o) => o.joining_date },
+        { label: 'Sent', get: (o) => new Date(o.sent_at).toLocaleDateString() },
+      ],
+      offers.filter((o) => o.sent_at)
+    ),
+  },
+  'positions-filled': {
+    title: 'Positions Filled — candidates marked hired',
+    value: () => candidates.filter((c) => c.status === 'hired').length,
+    render: () => renderTable(
+      [
+        { label: 'Candidate', get: (c) => c.full_name || c.email },
+        { label: 'Company / Position', get: (c) => `${companyOf(c)} / ${designationOf(c)}` },
+      ],
+      candidates.filter((c) => c.status === 'hired')
+    ),
+  },
+};
+
+function showMetric(key) {
+  const metric = METRICS[key];
+  if (!metric) return;
+
+  document.querySelectorAll('.kpi-tile').forEach((t) => t.classList.toggle('active', t.dataset.metric === key));
+  detailTitle.textContent = metric.title;
+  detailBody.innerHTML = metric.render();
+  detailPanel.classList.remove('hidden');
+  detailPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function loadDashboard() {
+  const [requestsRes, candidatesRes, interviewsRes, offersRes] = await Promise.all([
+    sb.from('recruitment_requests').select('vacancies, status, designation, department, companies(name)'),
+    sb.from('candidates').select('id, full_name, email, status, applied_at, source_subject, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name))'),
+    sb.from('interviews').select('id, scheduled_date, scheduled_time, candidates(full_name)'),
+    sb.from('offers').select('id, salary, joining_date, sent_at, candidates(full_name)'),
+  ]);
+
+  requests = requestsRes.data || [];
+  candidates = candidatesRes.data || [];
+  interviews = interviewsRes.data || [];
+  offers = offersRes.data || [];
+
+  Object.entries(METRICS).forEach(([key, metric]) => {
+    const tile = document.querySelector(`.kpi-tile[data-metric="${key}"] .value`);
+    if (tile) tile.textContent = metric.value();
+  });
+}
+
+document.querySelectorAll('.kpi-tile').forEach((tile) => {
+  tile.addEventListener('click', () => showMetric(tile.dataset.metric));
+});
+
 window.authReady.then(async (profile) => {
   if (!profile) return;
   renderSidebar('dashboard.html');
-
-  const { data, error } = await sb
-    .from('recruitment_requests')
-    .select('vacancies, status');
-
-  if (error) return;
-
-  const totalVacancies = data.reduce((sum, r) => sum + (r.vacancies || 0), 0);
-  const active = data.filter((r) => ['pending_approval', 'approved'].includes(r.status)).length;
-
-  document.getElementById('kpi-total-vacancies').textContent = totalVacancies;
-  document.getElementById('kpi-active-recruitments').textContent = active;
+  await loadDashboard();
 });
 </script>
 
