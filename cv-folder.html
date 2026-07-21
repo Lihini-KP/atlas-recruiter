@@ -167,16 +167,28 @@ async function loadFiled() {
     return r ? `${r.companies?.name || '—'} / ${r.department} / ${r.designation}` : 'Unassigned';
   });
 
+  const requestOptions = openRequests
+    .map((r) => `<option value="${r.id}">${r.designation} — ${r.companies?.name || ''} (${r.department})</option>`)
+    .join('');
+
   const sections = await Promise.all(Array.from(groups.entries()).map(async ([groupKey, candidates]) => {
+    const isUnassigned = groupKey === 'Unassigned';
     const rows = await Promise.all(candidates.map(async (c) => {
       const url = await cvSignedUrl(c.cv_storage_path);
       return `
-        <div class="cv-row">
+        <div class="cv-row" data-filed-id="${c.id}">
           <div class="cv-info">
             <div class="cv-name">${c.full_name || c.email || 'Unknown'}</div>
             <div class="cv-meta">${c.email || ''} · Status: ${c.status} · ${new Date(c.applied_at).toLocaleDateString()}</div>
           </div>
           <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
+          ${isUnassigned ? `
+            <select class="filed-assign-select">
+              <option value="">Assign to position…</option>
+              ${requestOptions}
+            </select>
+            <button class="btn-primary filed-assign-btn" style="padding:8px 14px;font-size:12.5px">Assign</button>
+          ` : ''}
         </div>
       `;
     }));
@@ -184,6 +196,27 @@ async function loadFiled() {
   }));
 
   filedList.innerHTML = sections.join('');
+
+  filedList.querySelectorAll('.filed-assign-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const row = btn.closest('.cv-row');
+      const candidateId = row.dataset.filedId;
+      const requestId = row.querySelector('.filed-assign-select').value;
+      if (!requestId) return;
+
+      const { error: updateError } = await sb
+        .from('candidates')
+        .update({ recruitment_request_id: requestId })
+        .eq('id', candidateId);
+
+      if (updateError) {
+        alert(updateError.message);
+        return;
+      }
+
+      loadFiled();
+    });
+  });
 }
 
 window.authReady.then(async (profile) => {
