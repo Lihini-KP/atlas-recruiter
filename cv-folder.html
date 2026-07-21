@@ -41,9 +41,11 @@
   .cv-row .cv-info { flex: 1; }
   .cv-row .cv-name { font-size: 14px; font-weight: 600; }
   .cv-row .cv-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .cv-row select { max-width: 260px; }
+  .cv-row select { max-width: 220px; }
   .folder-group { margin-bottom: 18px; }
   .folder-group h3 { font-size: 14px; margin: 0 0 8px; }
+  .new-folder-inline { display: none; gap: 8px; align-items: center; }
+  .new-folder-inline select, .new-folder-inline input { max-width: 170px; font-size: 12.5px; padding: 6px 8px; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -53,6 +55,8 @@
 const unmatchedList = document.getElementById('unmatched-list');
 const filedList = document.getElementById('filed-list');
 let openRequests = [];
+let manualFolders = [];
+let companies = [];
 
 async function cvSignedUrl(path) {
   if (!path) return '#';
@@ -68,6 +72,89 @@ async function loadOpenRequests() {
     .order('designation');
   if (error) return [];
   return data;
+}
+
+async function loadManualFolders() {
+  const { data, error } = await sb
+    .from('manual_folders')
+    .select('id, designation, companies(name)')
+    .order('designation');
+  if (error) return [];
+  return data;
+}
+
+async function loadCompanies() {
+  const { data, error } = await sb.from('companies').select('id, name').order('name');
+  if (error) return [];
+  return data;
+}
+
+function assignOptionsHTML() {
+  const requestOptions = openRequests
+    .map((r) => `<option value="req:${r.id}">${r.designation} — ${r.companies?.name || ''} (${r.department})</option>`)
+    .join('');
+  const folderOptions = manualFolders
+    .map((f) => `<option value="folder:${f.id}">${f.designation} — ${f.companies?.name || ''} (manual)</option>`)
+    .join('');
+  const companyOptions = companies.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+  return { requestOptions, folderOptions, companyOptions };
+}
+
+function assignControlHTML(rowKey) {
+  const { requestOptions, folderOptions, companyOptions } = assignOptionsHTML();
+  return `
+    <select class="assign-select" data-row="${rowKey}">
+      <option value="">Assign to position…</option>
+      ${requestOptions ? `<optgroup label="Open Positions">${requestOptions}</optgroup>` : ''}
+      ${folderOptions ? `<optgroup label="Manual Folders">${folderOptions}</optgroup>` : ''}
+      <option value="__new__">+ Create new folder…</option>
+    </select>
+    <span class="new-folder-inline" data-row="${rowKey}">
+      <select class="new-folder-company"><option value="">Company…</option>${companyOptions}</select>
+      <input type="text" class="new-folder-designation" placeholder="Designation" />
+    </span>
+    <button class="btn-primary assign-btn" data-row="${rowKey}" style="padding:8px 14px;font-size:12.5px">Assign</button>
+  `;
+}
+
+function wireAssignControl(row, onAssigned) {
+  const select = row.querySelector('.assign-select');
+  const inline = row.querySelector('.new-folder-inline');
+  const btn = row.querySelector('.assign-btn');
+
+  select.addEventListener('change', () => {
+    const isNew = select.value === '__new__';
+    inline.style.display = isNew ? 'flex' : 'none';
+    btn.textContent = isNew ? 'Create & Assign' : 'Assign';
+  });
+
+  btn.addEventListener('click', async () => {
+    if (select.value === '__new__') {
+      const companyId = row.querySelector('.new-folder-company').value;
+      const designation = row.querySelector('.new-folder-designation').value.trim();
+      if (!companyId || !designation) {
+        alert('Pick a company and type a designation for the new folder.');
+        return;
+      }
+      const { data: newFolder, error: folderError } = await sb
+        .from('manual_folders')
+        .insert({ company_id: companyId, designation })
+        .select()
+        .single();
+      if (folderError) {
+        alert(folderError.message);
+        return;
+      }
+      await onAssigned({ manual_folder_id: newFolder.id, recruitment_request_id: null });
+      manualFolders = await loadManualFolders();
+      return;
+    }
+
+    if (!select.value) return;
+    const [kind, id] = select.value.split(':');
+    if (kind === 'req') await onAssigned({ recruitment_request_id: id, manual_folder_id: null });
+    else if (kind === 'folder') await onAssigned({ manual_folder_id: id, recruitment_request_id: null });
+  });
 }
 
 async function loadUnmatched() {
@@ -87,10 +174,6 @@ async function loadUnmatched() {
     return;
   }
 
-  const requestOptions = openRequests
-    .map((r) => `<option value="${r.id}">${r.designation} — ${r.companies?.name || ''} (${r.department})</option>`)
-    .join('');
-
   const rows = await Promise.all(data.map(async (c) => {
     const url = await cvSignedUrl(c.cv_storage_path);
     return `
@@ -100,11 +183,7 @@ async function loadUnmatched() {
           <div class="cv-meta">${c.email || ''} · ${c.source_subject || ''} · ${new Date(c.applied_at).toLocaleString()}</div>
         </div>
         <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
-        <select class="assign-select">
-          <option value="">Assign to position…</option>
-          ${requestOptions}
-        </select>
-        <button class="btn-primary assign-btn" style="padding:8px 14px;font-size:12.5px">Assign</button>
+        ${assignControlHTML(c.id)}
       </div>
     `;
   }));
@@ -113,14 +192,10 @@ async function loadUnmatched() {
 
   data.forEach((c) => {
     const row = unmatchedList.querySelector(`.cv-row[data-id="${c.id}"]`);
-    row.querySelector('.assign-btn').addEventListener('click', async () => {
-      const select = row.querySelector('.assign-select');
-      const requestId = select.value;
-      if (!requestId) return;
-
+    wireAssignControl(row, async (fields) => {
       const { error: updateError } = await sb
         .from('candidates')
-        .update({ recruitment_request_id: requestId, status: 'applied' })
+        .update({ ...fields, status: 'applied' })
         .eq('id', c.id);
 
       if (updateError) {
@@ -148,7 +223,7 @@ function groupBy(items, keyFn) {
 async function loadFiled() {
   const { data, error } = await sb
     .from('candidates')
-    .select('*, recruitment_requests(designation, department, companies(name))')
+    .select('*, recruitment_requests(designation, department, companies(name)), manual_folders(designation, companies(name))')
     .neq('status', 'unmatched')
     .order('applied_at', { ascending: false });
 
@@ -164,12 +239,11 @@ async function loadFiled() {
 
   const groups = groupBy(data, (c) => {
     const r = c.recruitment_requests;
-    return r ? `${r.companies?.name || '—'} / ${r.department} / ${r.designation}` : 'Unassigned';
+    const mf = c.manual_folders;
+    if (r) return `${r.companies?.name || '—'} / ${r.department} / ${r.designation}`;
+    if (mf) return `${mf.companies?.name || '—'} / ${mf.designation} (manual folder)`;
+    return 'Unassigned';
   });
-
-  const requestOptions = openRequests
-    .map((r) => `<option value="${r.id}">${r.designation} — ${r.companies?.name || ''} (${r.department})</option>`)
-    .join('');
 
   const sections = await Promise.all(Array.from(groups.entries()).map(async ([groupKey, candidates]) => {
     const isUnassigned = groupKey === 'Unassigned';
@@ -182,13 +256,7 @@ async function loadFiled() {
             <div class="cv-meta">${c.email || ''} · Status: ${c.status} · ${new Date(c.applied_at).toLocaleDateString()}</div>
           </div>
           <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
-          ${isUnassigned ? `
-            <select class="filed-assign-select">
-              <option value="">Assign to position…</option>
-              ${requestOptions}
-            </select>
-            <button class="btn-primary filed-assign-btn" style="padding:8px 14px;font-size:12.5px">Assign</button>
-          ` : ''}
+          ${isUnassigned ? assignControlHTML(c.id) : ''}
         </div>
       `;
     }));
@@ -197,17 +265,15 @@ async function loadFiled() {
 
   filedList.innerHTML = sections.join('');
 
-  filedList.querySelectorAll('.filed-assign-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const row = btn.closest('.cv-row');
-      const candidateId = row.dataset.filedId;
-      const requestId = row.querySelector('.filed-assign-select').value;
-      if (!requestId) return;
-
+  data.forEach((c) => {
+    if (c.recruitment_requests || c.manual_folders) return;
+    const row = filedList.querySelector(`.cv-row[data-filed-id="${c.id}"]`);
+    if (!row) return;
+    wireAssignControl(row, async (fields) => {
       const { error: updateError } = await sb
         .from('candidates')
-        .update({ recruitment_request_id: requestId })
-        .eq('id', candidateId);
+        .update(fields)
+        .eq('id', c.id);
 
       if (updateError) {
         alert(updateError.message);
@@ -227,7 +293,7 @@ window.authReady.then(async (profile) => {
     filedList.innerHTML = '';
     return;
   }
-  openRequests = await loadOpenRequests();
+  [openRequests, manualFolders, companies] = await Promise.all([loadOpenRequests(), loadManualFolders(), loadCompanies()]);
   await Promise.all([loadUnmatched(), loadFiled()]);
 });
 </script>

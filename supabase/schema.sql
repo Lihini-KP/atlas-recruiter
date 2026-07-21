@@ -393,3 +393,27 @@ create policy "offers readable by hr, admin"
 create policy "offers insertable by hr, admin"
   on offers for insert
   with check (current_user_role() in ('hr', 'admin'));
+
+-- ── CV Folder: manual folders for designations with no approved recruitment
+-- request yet, so HR can still file/group emailed CVs by role.
+create table manual_folders (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references companies(id),
+  designation text not null,
+  created_by uuid references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+alter table candidates add column if not exists manual_folder_id uuid references manual_folders(id);
+
+alter table manual_folders enable row level security;
+
+grant select, insert on public.manual_folders to authenticated;
+
+create policy "manual_folders readable by hr, admin"
+  on manual_folders for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "manual_folders insertable by hr, admin"
+  on manual_folders for insert
+  with check (current_user_role() in ('hr', 'admin'));
