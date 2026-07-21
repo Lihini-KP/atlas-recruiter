@@ -85,11 +85,11 @@ function groupBy(items, keyFn) {
 }
 
 function companyOf(candidate) {
-  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+  return candidate.recruitment_requests?.companies?.name || candidate.manual_folders?.companies?.name || 'Unassigned';
 }
 
 function designationOf(candidate) {
-  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+  return candidate.recruitment_requests?.designation || candidate.manual_folders?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
 }
 
 function renderCrumbs(parts) {
@@ -305,7 +305,7 @@ async function loadInterviews() {
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('candidates')
-      .select('id, full_name, email, phone, offer_selection, recruitment_requests(designation, companies(name)), interviews(scheduled_date, scheduled_time, meeting_link, created_at)')
+      .select('id, full_name, email, phone, offer_selection, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)), interviews(scheduled_date, scheduled_time, meeting_link, created_at)')
       .eq('interview_selection', 'selected')
       .order('applied_at', { ascending: false }),
   ]);

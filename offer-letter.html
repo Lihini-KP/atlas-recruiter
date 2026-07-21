@@ -78,11 +78,11 @@ function groupBy(items, keyFn) {
 }
 
 function companyOf(candidate) {
-  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+  return candidate.recruitment_requests?.companies?.name || candidate.manual_folders?.companies?.name || 'Unassigned';
 }
 
 function designationOf(candidate) {
-  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+  return candidate.recruitment_requests?.designation || candidate.manual_folders?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
 }
 
 function renderCrumbs(parts) {
@@ -305,7 +305,7 @@ async function loadOffers() {
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('candidates')
-      .select('id, full_name, email, phone, recruitment_requests(designation, companies(name)), offers(salary, joining_date, sent_at, created_at)')
+      .select('id, full_name, email, phone, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)), offers(salary, joining_date, sent_at, created_at)')
       .eq('offer_selection', 'selected')
       .order('applied_at', { ascending: false }),
   ]);
