@@ -121,6 +121,10 @@ create table candidates (
   source text, -- e.g. 'email_import', 'application_portal'
   source_email_id text, -- Gmail message id, for de-duplication on re-runs
   source_subject text,
+  location text, -- AI-extracted from the CV (see analyze-candidate-cv.js)
+  education text, -- AI-extracted from the CV
+  experience_summary text, -- AI-extracted from the CV
+  cv_analyzed_at timestamptz,
   applied_at timestamptz not null default now()
 );
 
@@ -351,3 +355,9 @@ create policy "assessments readable by hr, admin"
 create policy "assessments insertable by hr, admin"
   on assessments for insert
   with check (current_user_role() in ('hr', 'admin'));
+
+-- ── Candidate Pipeline: AI-extracted CV fields ───────────────────────────────
+alter table candidates add column if not exists location text;
+alter table candidates add column if not exists education text;
+alter table candidates add column if not exists experience_summary text;
+alter table candidates add column if not exists cv_analyzed_at timestamptz;
