@@ -41,23 +41,28 @@
 
   .pipeline-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 13px; }
   .pipeline-table th, .pipeline-table td {
-    border: 1px solid var(--border); padding: 9px 14px; text-align: left;
+    border: 1px solid var(--border); padding: 9px 12px; text-align: left;
     overflow-wrap: break-word; vertical-align: top;
   }
-  .pipeline-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 12px; }
+  .pipeline-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11.5px; }
   .pipeline-table td:first-child { font-weight: 600; }
-  /* Give Experience (and Education, also often long) more breathing room than the
-     shorter columns, instead of every column splitting the width evenly. */
-  .pipeline-table th:nth-child(1), .pipeline-table td:nth-child(1) { width: 13%; }
-  .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2) { width: 9%; }
-  .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { width: 15%; }
-  .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { width: 32%; }
-  .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) { width: 11%; }
-  .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6) { width: 10%; }
-  .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7) { width: 10%; }
+  .pipeline-table th:nth-child(1), .pipeline-table td:nth-child(1) { width: 11%; }
+  .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2) { width: 8%; }
+  .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { width: 8%; }
+  .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { width: 12%; }
+  .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) { width: 21%; }
+  .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6) { width: 8%; }
+  .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7) { width: 8%; }
+  .pipeline-table th:nth-child(8), .pipeline-table td:nth-child(8) { width: 9%; }
+  .pipeline-table th:nth-child(9), .pipeline-table td:nth-child(9) { width: 15%; }
   .pipeline-table .pending { color: var(--muted); font-style: italic; }
   .pipeline-table .row-actions { display: flex; flex-direction: column; gap: 6px; }
   .pipeline-table .row-actions button { padding: 6px 10px; font-size: 12px; }
+  .pipeline-table select.interview-select { width: 100%; padding: 6px 8px; font-size: 12px; }
+  .schedule-block { display: flex; flex-direction: column; gap: 6px; }
+  .schedule-block input[type="datetime-local"] { padding: 6px 8px; font-size: 12px; }
+  .scheduled-info { font-size: 12px; }
+  .scheduled-info a { color: var(--accent); font-weight: 600; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -65,6 +70,9 @@
 <script src="lib/sidebar.js"></script>
 <script src="lib/company-styles.js"></script>
 <script>
+// TODO: replace with the Apps Script Web App URL from interview-scheduler.gs's deployment
+const APPS_SCRIPT_WEBAPP_URL = 'REPLACE_WITH_APPS_SCRIPT_WEBAPP_URL';
+
 const main = document.getElementById('main-content');
 const pageSubtitle = document.getElementById('page-subtitle');
 let allCandidates = [];
@@ -125,6 +133,12 @@ function latestAssessment(candidate) {
   return list.slice().sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0].answers;
 }
 
+function latestInterview(candidate) {
+  const list = candidate.interviews || [];
+  if (!list.length) return null;
+  return list.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+}
+
 async function cvSignedUrl(path) {
   if (!path) return null;
   const { data } = await sb.storage.from('cvs').createSignedUrl(path, 3600);
@@ -138,26 +152,46 @@ function cell(value, pendingLabel) {
 
 function renderRow(candidate) {
   const answers = latestAssessment(candidate) || {};
+  const interview = latestInterview(candidate);
   const r = candidate.recruitment_requests;
   const position = r ? r.designation : 'Position not assigned';
   const analyzed = !!candidate.cv_analyzed_at;
   const noticePeriod = answers.currentlyEmployed === 'Yes'
     ? answers.noticePeriod
     : (answers.currentlyEmployed === 'No' ? 'Immediately available' : null);
+  const selection = candidate.interview_selection || '';
+
+  const scheduleHtml = interview
+    ? `<div class="scheduled-info">📅 ${interview.scheduled_date} ${interview.scheduled_time || ''}<br>${interview.meeting_link ? `<a href="${interview.meeting_link}" target="_blank">Join Meet</a>` : ''}</div>`
+    : `
+      <div class="schedule-block">
+        <input type="datetime-local" class="schedule-datetime" />
+        <button class="btn-primary schedule-btn">Schedule Interview</button>
+      </div>
+    `;
 
   return `
     <tr data-id="${candidate.id}">
       <td>${candidate.full_name || candidate.email}<div class="pending" style="font-style:normal">${position}</div></td>
+      <td>${cell(candidate.phone, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
       <td>${cell(candidate.location, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
       <td>${cell(candidate.education, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
       <td>${cell(candidate.experience_summary, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
       <td>${cell(answers.expectedSalary)}</td>
       <td>${cell(noticePeriod)}</td>
       <td>
+        <select class="interview-select">
+          <option value="" ${selection === '' ? 'selected' : ''}>—</option>
+          <option value="selected" ${selection === 'selected' ? 'selected' : ''}>Selected</option>
+          <option value="not_selected" ${selection === 'not_selected' ? 'selected' : ''}>Not Selected</option>
+        </select>
+      </td>
+      <td>
         <div class="row-actions">
           ${candidate.cv_storage_path ? `<button class="btn-secondary view-cv-btn">View CV</button>` : ''}
           ${!analyzed && candidate.cv_storage_path ? `<button class="btn-primary analyze-btn">Analyze CV</button>` : ''}
         </div>
+        ${scheduleHtml}
       </td>
     </tr>
   `;
@@ -192,6 +226,7 @@ function bindRow(candidate) {
         candidate.location = payload.candidate.location;
         candidate.education = payload.candidate.education;
         candidate.experience_summary = payload.candidate.experience_summary;
+        candidate.phone = payload.candidate.phone;
         candidate.cv_analyzed_at = payload.candidate.cv_analyzed_at;
         row.outerHTML = renderRow(candidate);
         bindRow(candidate);
@@ -199,6 +234,81 @@ function bindRow(candidate) {
         alert(err.message);
         analyzeBtn.disabled = false;
         analyzeBtn.textContent = 'Analyze CV';
+      }
+    });
+  }
+
+  const selectEl = row.querySelector('.interview-select');
+  if (selectEl) {
+    selectEl.addEventListener('change', async () => {
+      const value = selectEl.value || null;
+      selectEl.disabled = true;
+      const { error } = await sb.from('candidates').update({ interview_selection: value }).eq('id', candidate.id);
+      selectEl.disabled = false;
+      if (error) {
+        alert(error.message);
+        return;
+      }
+      candidate.interview_selection = value;
+    });
+  }
+
+  const scheduleBtn = row.querySelector('.schedule-btn');
+  if (scheduleBtn) {
+    scheduleBtn.addEventListener('click', async () => {
+      const input = row.querySelector('.schedule-datetime');
+      if (!input.value) {
+        alert('Pick a date and time first.');
+        return;
+      }
+      if (!candidate.email) {
+        alert('This candidate has no email on file.');
+        return;
+      }
+      if (APPS_SCRIPT_WEBAPP_URL.includes('REPLACE_WITH')) {
+        alert('The interview scheduler is not configured yet (APPS_SCRIPT_WEBAPP_URL).');
+        return;
+      }
+
+      scheduleBtn.disabled = true;
+      scheduleBtn.innerHTML = '<span class="spinner"></span>Scheduling…';
+      try {
+        const startIso = new Date(input.value).toISOString();
+        const res = await fetch(APPS_SCRIPT_WEBAPP_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'scheduleInterview',
+            candidateEmail: candidate.email,
+            candidateName: candidate.full_name,
+            startIso,
+            durationMinutes: 30,
+          }),
+        });
+        const payload = await res.json();
+        if (!payload.ok) throw new Error(payload.error || 'Scheduling failed');
+
+        const start = new Date(payload.start);
+        const { error } = await sb.from('interviews').insert({
+          candidate_id: candidate.id,
+          interview_type: 'Online',
+          scheduled_date: start.toISOString().slice(0, 10),
+          scheduled_time: start.toTimeString().slice(0, 8),
+          meeting_link: payload.meetingLink,
+        });
+        if (error) throw error;
+
+        candidate.interviews = [{
+          scheduled_date: start.toISOString().slice(0, 10),
+          scheduled_time: start.toTimeString().slice(0, 8),
+          meeting_link: payload.meetingLink,
+          created_at: new Date().toISOString(),
+        }];
+        row.outerHTML = renderRow(candidate);
+        bindRow(candidate);
+      } catch (err) {
+        alert(err.message);
+        scheduleBtn.disabled = false;
+        scheduleBtn.textContent = 'Schedule Interview';
       }
     });
   }
@@ -215,12 +325,14 @@ function renderCompanyPipeline(companyName, candidates) {
           <thead>
             <tr>
               <th>Candidate</th>
+              <th>Phone</th>
               <th>Location</th>
               <th>Education</th>
               <th>Experience</th>
               <th>Salary Expectation</th>
               <th>Notice Period</th>
-              <th>Actions</th>
+              <th>Interview Selection</th>
+              <th>Interview</th>
             </tr>
           </thead>
           <tbody>
@@ -240,7 +352,7 @@ async function loadPipeline() {
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('candidates')
-      .select('id, full_name, email, cv_storage_path, location, education, experience_summary, cv_analyzed_at, recruitment_requests(designation, companies(name)), assessments(answers, submitted_at)')
+      .select('id, full_name, email, phone, cv_storage_path, location, education, experience_summary, cv_analyzed_at, interview_selection, recruitment_requests(designation, companies(name)), assessments(answers, submitted_at), interviews(scheduled_date, scheduled_time, meeting_link, created_at)')
       .eq('status', 'shortlisted')
       .order('applied_at', { ascending: false }),
   ]);
