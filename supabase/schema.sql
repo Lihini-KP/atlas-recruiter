@@ -361,3 +361,21 @@ alter table candidates add column if not exists location text;
 alter table candidates add column if not exists education text;
 alter table candidates add column if not exists experience_summary text;
 alter table candidates add column if not exists cv_analyzed_at timestamptz;
+
+-- ── Candidate Pipeline: interview selection + scheduling ─────────────────────
+alter table candidates add column if not exists interview_selection text; -- 'selected' | 'not_selected'
+
+grant select, insert, update on public.interviews to authenticated;
+
+create policy "interviews readable by hr, admin"
+  on interviews for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "interviews insertable by hr, admin"
+  on interviews for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "interviews updatable by hr, admin"
+  on interviews for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));

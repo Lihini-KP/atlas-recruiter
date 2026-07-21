@@ -77,7 +77,7 @@ exports.handler = async (event) => {
               { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Pdf } },
               {
                 type: 'text',
-                text: 'Read this CV and return ONLY valid JSON (no markdown fences), with this exact shape: {"location": string, "education": string, "experience_summary": string}. "location" is the candidate\'s current city/area if stated, else "Not specified". "education" is their highest or most relevant qualification, one line. "experience_summary" is a one-sentence summary of their relevant work experience (role types and total years if inferable).',
+                text: 'Read this CV and return ONLY valid JSON (no markdown fences), with this exact shape: {"location": string, "education": string, "experience_summary": string, "phone": string}. "location" is the candidate\'s current city/area if stated, else "Not specified". "education" is their highest or most relevant qualification, one line. "experience_summary" is a one-sentence summary of their relevant work experience (role types and total years if inferable). "phone" is their contact phone number exactly as written on the CV, else "Not specified".',
               },
             ],
           },
@@ -102,6 +102,7 @@ exports.handler = async (event) => {
         location: extracted.location,
         education: extracted.education,
         experience_summary: extracted.experience_summary,
+        phone: extracted.phone,
         cv_analyzed_at: new Date().toISOString(),
       }),
     });
