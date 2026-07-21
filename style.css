@@ -175,6 +175,7 @@ body.with-sidebar { padding-left: 232px; }
 .sidebar-user { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 4px; text-transform: capitalize; }
 .sidebar-nav { display: flex; flex-direction: column; gap: 8px; flex: 1; }
 .sidebar-nav a {
+  display: flex; align-items: center; gap: 10px;
   font-size: 13.5px;
   color: rgba(255,255,255,0.85);
   text-decoration: none;
@@ -184,6 +185,7 @@ body.with-sidebar { padding-left: 232px; }
   background: rgba(129,140,248,0.07);
   transition: background 0.15s ease, border-color 0.15s ease;
 }
+.sidebar-icon { font-size: 15px; line-height: 1; }
 .sidebar-nav a:hover { background: rgba(129,140,248,0.16); border-color: rgba(129,140,248,0.65); }
 .sidebar-nav a.active { background: #818cf8; border-color: #818cf8; color: #0a0a0f; font-weight: 700; }
 .sidebar-signout {

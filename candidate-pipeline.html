@@ -16,7 +16,7 @@
 <header>
   <div class="brand">
     <h1>Candidate Pipeline</h1>
-    <p>Shortlisted candidates — CV details fill in automatically from their resume + assessment answers.</p>
+    <p id="page-subtitle">Choose a company to see its shortlisted candidates.</p>
   </div>
 </header>
 
@@ -25,6 +25,20 @@
 </main>
 
 <style>
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .crumb-nav a:hover { text-decoration: underline; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .tile {
+    border-radius: 14px; padding: 22px 20px; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-icon { font-size: 26px; margin-bottom: 10px; }
+  .tile .tile-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .tile .tile-count { font-size: 12.5px; opacity: 0.8; }
+
   .pipeline-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 13px; }
   .pipeline-table th, .pipeline-table td {
     border: 1px solid var(--border); padding: 9px 14px; text-align: left;
@@ -40,9 +54,61 @@
 <script src="lib/supabase-client.js"></script>
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
+<script src="lib/company-styles.js"></script>
 <script>
 const main = document.getElementById('main-content');
-let pipelineCandidates = [];
+const pageSubtitle = document.getElementById('page-subtitle');
+let allCandidates = [];
+let allCompanies = [];
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+}
+
+function renderCrumbs(parts) {
+  return `<div class="crumb-nav">${parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    return isLast ? `<span>${p.label}</span>` : `<a data-nav="${p.nav}">${p.label}</a><span>›</span>`;
+  }).join('')}</div>`;
+}
+
+function renderCompanyList() {
+  pageSubtitle.textContent = 'Choose a company to see its shortlisted candidates.';
+  const groups = groupBy(allCandidates, companyOf);
+
+  const names = allCompanies.map((c) => c.name);
+  if (groups.has('Unassigned')) names.push('Unassigned');
+
+  main.innerHTML = `
+    <div class="tile-grid">
+      ${names.map((name) => {
+        const count = (groups.get(name) || []).length;
+        const s = companyStyleFor(name);
+        return `
+          <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-icon">${s.icon}</div>
+            <div class="tile-name">${name}</div>
+            <div class="tile-count">${count} shortlisted</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  main.querySelectorAll('.tile[data-company]').forEach((tile) => {
+    tile.addEventListener('click', () => renderCompanyPipeline(decodeURIComponent(tile.dataset.company), groups.get(decodeURIComponent(tile.dataset.company)) || []));
+  });
+}
 
 function latestAssessment(candidate) {
   const list = candidate.assessments || [];
@@ -64,7 +130,7 @@ function cell(value, pendingLabel) {
 function renderRow(candidate) {
   const answers = latestAssessment(candidate) || {};
   const r = candidate.recruitment_requests;
-  const position = r ? `${r.companies?.name || '—'} · ${r.designation}` : 'Position not assigned';
+  const position = r ? r.designation : 'Position not assigned';
   const analyzed = !!candidate.cv_analyzed_at;
   const noticePeriod = answers.currentlyEmployed === 'Yes'
     ? answers.noticePeriod
@@ -129,47 +195,65 @@ function bindRow(candidate) {
   }
 }
 
-async function loadPipeline() {
-  const { data, error } = await sb
-    .from('candidates')
-    .select('id, full_name, email, cv_storage_path, location, education, experience_summary, cv_analyzed_at, recruitment_requests(designation, companies(name)), assessments(answers, submitted_at)')
-    .eq('status', 'shortlisted')
-    .order('applied_at', { ascending: false });
+function renderCompanyPipeline(companyName, candidates) {
+  pageSubtitle.textContent = `${companyName} · shortlisted candidates`;
 
-  if (error) {
-    main.innerHTML = `<div class="status error">${error.message}</div>`;
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${candidates.length ? `
+      <section class="panel">
+        <table class="pipeline-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Location</th>
+              <th>Education</th>
+              <th>Experience</th>
+              <th>Salary Expectation</th>
+              <th>Notice Period</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${candidates.map(renderRow).join('')}
+          </tbody>
+        </table>
+      </section>
+    ` : '<p class="kpi-note">No shortlisted candidates for this company yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  candidates.forEach(bindRow);
+}
+
+async function loadPipeline() {
+  const [companiesRes, candidatesRes] = await Promise.all([
+    sb.from('companies').select('id, name').order('name'),
+    sb
+      .from('candidates')
+      .select('id, full_name, email, cv_storage_path, location, education, experience_summary, cv_analyzed_at, recruitment_requests(designation, companies(name)), assessments(answers, submitted_at)')
+      .eq('status', 'shortlisted')
+      .order('applied_at', { ascending: false }),
+  ]);
+
+  if (companiesRes.error) {
+    main.innerHTML = `<div class="status error">${companiesRes.error.message}</div>`;
+    return;
+  }
+  if (candidatesRes.error) {
+    main.innerHTML = `<div class="status error">${candidatesRes.error.message}</div>`;
     return;
   }
 
-  if (!data.length) {
+  allCompanies = companiesRes.data;
+  allCandidates = candidatesRes.data;
+
+  if (!allCandidates.length) {
     main.innerHTML = '<p class="kpi-note">No shortlisted candidates yet — shortlist someone from the Candidate Assessment tab.</p>';
     return;
   }
 
-  pipelineCandidates = data;
-
-  main.innerHTML = `
-    <section class="panel">
-      <table class="pipeline-table">
-        <thead>
-          <tr>
-            <th>Candidate</th>
-            <th>Location</th>
-            <th>Education</th>
-            <th>Experience</th>
-            <th>Salary Expectation</th>
-            <th>Notice Period</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${data.map(renderRow).join('')}
-        </tbody>
-      </table>
-    </section>
-  `;
-
-  data.forEach(bindRow);
+  renderCompanyList();
 }
 
 window.authReady.then((profile) => {
