@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Candidate Pipeline — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Candidate Pipeline</h1>
+    <p>Shortlisted candidates — CV details fill in automatically from their resume + assessment answers.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  .candidate-card {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px 20px; margin-bottom: 14px; background: var(--panel);
+  }
+  .candidate-card .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .candidate-card .name { font-size: 16px; font-weight: 700; }
+  .candidate-card .position { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+  .candidate-card .fields {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px; margin-top: 14px;
+  }
+  .candidate-card .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+  .candidate-card .field .value { font-size: 13.5px; font-weight: 600; }
+  .candidate-card .field .value.pending { font-weight: 400; color: var(--muted); font-style: italic; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+const main = document.getElementById('main-content');
+
+function latestAssessment(candidate) {
+  const list = candidate.assessments || [];
+  if (!list.length) return null;
+  return list.slice().sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0].answers;
+}
+
+function fieldHtml(label, value, pendingLabel) {
+  const isPending = !value;
+  return `
+    <div class="field">
+      <label>${label}</label>
+      <div class="value${isPending ? ' pending' : ''}">${isPending ? (pendingLabel || 'Not available') : value}</div>
+    </div>
+  `;
+}
+
+async function cvSignedUrl(path) {
+  if (!path) return null;
+  const { data } = await sb.storage.from('cvs').createSignedUrl(path, 3600);
+  return data?.signedUrl || null;
+}
+
+function renderCard(candidate) {
+  const answers = latestAssessment(candidate) || {};
+  const r = candidate.recruitment_requests;
+  const position = r ? `${r.companies?.name || '—'} · ${r.designation}` : 'Position not assigned';
+  const analyzed = !!candidate.cv_analyzed_at;
+
+  return `
+    <div class="candidate-card" data-id="${candidate.id}">
+      <div class="top-row">
+        <div>
+          <div class="name">${candidate.full_name || candidate.email}</div>
+          <div class="position">${position}</div>
+        </div>
+        <div class="actions" style="margin-top:0">
+          ${candidate.cv_storage_path ? `<button class="btn-secondary view-cv-btn" style="padding:8px 14px;font-size:12.5px">View CV</button>` : ''}
+          ${!analyzed && candidate.cv_storage_path ? `<button class="btn-primary analyze-btn" style="padding:8px 14px;font-size:12.5px">Analyze CV</button>` : ''}
+        </div>
+      </div>
+      <div class="fields">
+        ${fieldHtml('Location', candidate.location, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
+        ${fieldHtml('Education', candidate.education, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
+        ${fieldHtml('Experience', candidate.experience_summary, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
+        ${fieldHtml('Salary Expectation', answers.expectedSalary)}
+        ${fieldHtml('Notice Period', answers.currentlyEmployed === 'Yes' ? answers.noticePeriod : (answers.currentlyEmployed === 'No' ? 'Immediately available' : null))}
+      </div>
+    </div>
+  `;
+}
+
+async function loadPipeline() {
+  const { data, error } = await sb
+    .from('candidates')
+    .select('id, full_name, email, cv_storage_path, location, education, experience_summary, cv_analyzed_at, recruitment_requests(designation, companies(name)), assessments(answers, submitted_at)')
+    .eq('status', 'shortlisted')
+    .order('applied_at', { ascending: false });
+
+  if (error) {
+    main.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  if (!data.length) {
+    main.innerHTML = '<p class="kpi-note">No shortlisted candidates yet — shortlist someone from the Candidate Assessment tab.</p>';
+    return;
+  }
+
+  main.innerHTML = `<section class="panel">${data.map(renderCard).join('')}</section>`;
+
+  data.forEach((candidate) => {
+    const card = main.querySelector(`.candidate-card[data-id="${candidate.id}"]`);
+
+    const viewBtn = card.querySelector('.view-cv-btn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', async () => {
+        const url = await cvSignedUrl(candidate.cv_storage_path);
+        if (url) window.open(url, '_blank');
+      });
+    }
+
+    const analyzeBtn = card.querySelector('.analyze-btn');
+    if (analyzeBtn) {
+      analyzeBtn.addEventListener('click', async () => {
+        analyzeBtn.disabled = true;
+        analyzeBtn.innerHTML = '<span class="spinner"></span>Analyzing…';
+        try {
+          const res = await fetch('/.netlify/functions/analyze-candidate-cv', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ candidateId: candidate.id }),
+          });
+          const payload = await res.json();
+          if (!res.ok) throw new Error(payload.error || 'Analysis failed');
+
+          candidate.location = payload.candidate.location;
+          candidate.education = payload.candidate.education;
+          candidate.experience_summary = payload.candidate.experience_summary;
+          candidate.cv_analyzed_at = payload.candidate.cv_analyzed_at;
+          card.outerHTML = renderCard(candidate);
+          bindCard(candidate);
+        } catch (err) {
+          alert(err.message);
+          analyzeBtn.disabled = false;
+          analyzeBtn.textContent = 'Analyze CV';
+        }
+      });
+    }
+  });
+
+  function bindCard(candidate) {
+    const card = main.querySelector(`.candidate-card[data-id="${candidate.id}"]`);
+    const viewBtn = card.querySelector('.view-cv-btn');
+    if (viewBtn) {
+      viewBtn.addEventListener('click', async () => {
+        const url = await cvSignedUrl(candidate.cv_storage_path);
+        if (url) window.open(url, '_blank');
+      });
+    }
+  }
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('candidate-pipeline.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadPipeline();
+});
+</script>
+
+</body>
+</html>
