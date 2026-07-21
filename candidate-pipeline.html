@@ -46,6 +46,15 @@
   }
   .pipeline-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 12px; }
   .pipeline-table td:first-child { font-weight: 600; }
+  /* Give Experience (and Education, also often long) more breathing room than the
+     shorter columns, instead of every column splitting the width evenly. */
+  .pipeline-table th:nth-child(1), .pipeline-table td:nth-child(1) { width: 13%; }
+  .pipeline-table th:nth-child(2), .pipeline-table td:nth-child(2) { width: 9%; }
+  .pipeline-table th:nth-child(3), .pipeline-table td:nth-child(3) { width: 15%; }
+  .pipeline-table th:nth-child(4), .pipeline-table td:nth-child(4) { width: 32%; }
+  .pipeline-table th:nth-child(5), .pipeline-table td:nth-child(5) { width: 11%; }
+  .pipeline-table th:nth-child(6), .pipeline-table td:nth-child(6) { width: 10%; }
+  .pipeline-table th:nth-child(7), .pipeline-table td:nth-child(7) { width: 10%; }
   .pipeline-table .pending { color: var(--muted); font-style: italic; }
   .pipeline-table .row-actions { display: flex; flex-direction: column; gap: 6px; }
   .pipeline-table .row-actions button { padding: 6px 10px; font-size: 12px; }
