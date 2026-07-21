@@ -55,9 +55,12 @@
   .offer-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
   .offer-table td:first-child { font-weight: 600; }
   .pending { color: var(--muted); font-style: italic; }
-  .offer-form { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
-  .offer-form input { padding: 6px 8px; font-size: 11.5px; }
+  .offer-form { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
+  .offer-form input, .offer-form textarea { padding: 6px 8px; font-size: 11.5px; font-family: inherit; }
+  .offer-form textarea { resize: vertical; min-height: 90px; line-height: 1.4; }
   .offer-form button { padding: 6px 10px; font-size: 11.5px; }
+  .offer-form .offer-form-actions { display: flex; gap: 6px; }
+  .offer-form .offer-form-actions button { flex: 1; }
   .offer-sent-summary { font-size: 11.5px; line-height: 1.6; }
   .offer-sent-summary .sent-badge { color: #16a34a; font-weight: 700; }
 </style>
@@ -162,6 +165,21 @@ function latestOffer(candidate) {
   return list.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
 }
 
+function draftOfferBody(candidate, companyName, designation, salary, joiningDate) {
+  return `Dear ${candidate.full_name || 'Candidate'},
+
+Congratulations! We are pleased to offer you the position of ${designation} at ${companyName}.
+
+Salary: ${salary || '[salary]'}
+Joining Date: ${joiningDate || '[joining date]'}
+
+Please confirm your acceptance of this offer by replying to this email.
+
+Kind Regards
+Human Resources
+${companyName}`;
+}
+
 function renderOfferCell(candidate) {
   const offer = latestOffer(candidate);
   if (offer && offer.sent_at) {
@@ -178,10 +196,12 @@ function renderOfferCell(candidate) {
     <div class="offer-form">
       <input type="text" class="offer-salary" placeholder="Salary (e.g. LKR 180,000)" />
       <input type="date" class="offer-joining-date" />
-      <input type="text" class="offer-benefits" placeholder="Benefits (optional)" />
-      <input type="text" class="offer-notice" placeholder="Notice Period (optional)" />
-      <input type="text" class="offer-probation" placeholder="Probation (optional)" />
-      <button class="btn-primary send-offer-btn">Send Offer Letter</button>
+      <textarea class="offer-body" placeholder="Click &quot;Draft Mail&quot; once salary and joining date are filled in…"></textarea>
+      <div class="offer-form-actions">
+        <button type="button" class="btn-secondary draft-body-btn">Draft Mail</button>
+        <button type="button" class="btn-secondary copy-body-btn">Copy</button>
+      </div>
+      <button type="button" class="btn-primary mark-sent-btn">Mark Offer Sent</button>
     </div>
   `;
 }
@@ -201,55 +221,47 @@ function bindOfferRow(candidate, companyName, designation) {
   const row = main.querySelector(`tr[data-id="${candidate.id}"]`);
   if (!row) return;
 
-  const sendBtn = row.querySelector('.send-offer-btn');
-  if (!sendBtn) return;
+  const markSentBtn = row.querySelector('.mark-sent-btn');
+  if (!markSentBtn) return;
 
-  sendBtn.addEventListener('click', async () => {
-    const salary = row.querySelector('.offer-salary').value.trim();
-    const joiningDate = row.querySelector('.offer-joining-date').value;
-    const benefits = row.querySelector('.offer-benefits').value.trim();
-    const noticePeriod = row.querySelector('.offer-notice').value.trim();
-    const probation = row.querySelector('.offer-probation').value.trim();
+  const draftBtn = row.querySelector('.draft-body-btn');
+  const copyBtn = row.querySelector('.copy-body-btn');
+  const bodyField = row.querySelector('.offer-body');
+  const salaryField = row.querySelector('.offer-salary');
+  const joiningDateField = row.querySelector('.offer-joining-date');
+
+  draftBtn.addEventListener('click', () => {
+    bodyField.value = draftOfferBody(candidate, companyName, designation, salaryField.value.trim(), joiningDateField.value);
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    if (!bodyField.value.trim()) {
+      alert('Nothing to copy yet — click "Draft Mail" first.');
+      return;
+    }
+    await navigator.clipboard.writeText(bodyField.value);
+    copyBtn.textContent = 'Copied ✓';
+    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+  });
+
+  markSentBtn.addEventListener('click', async () => {
+    const salary = salaryField.value.trim();
+    const joiningDate = joiningDateField.value;
 
     if (!salary || !joiningDate) {
       alert('Salary and Joining Date are required.');
       return;
     }
-    if (!candidate.email) {
-      alert('This candidate has no email on file.');
-      return;
-    }
 
-    sendBtn.disabled = true;
-    sendBtn.innerHTML = '<span class="spinner"></span>Sending…';
+    markSentBtn.disabled = true;
+    markSentBtn.innerHTML = '<span class="spinner"></span>Saving…';
     try {
-      const res = await fetch('/.netlify/functions/send-offer-letter', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          candidateEmail: candidate.email,
-          candidateName: candidate.full_name,
-          designation,
-          companyName,
-          salary,
-          joiningDate,
-          benefits,
-          noticePeriod,
-          probation,
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error || 'Sending offer letter failed');
-
       const sentAt = new Date().toISOString();
       const { error } = await sb.from('offers').insert({
         candidate_id: candidate.id,
         designation,
         salary,
         joining_date: joiningDate,
-        benefits: benefits || null,
-        notice_period: noticePeriod || null,
-        probation: probation || null,
         sent_at: sentAt,
       });
       if (error) throw error;
@@ -259,8 +271,8 @@ function bindOfferRow(candidate, companyName, designation) {
       bindOfferRow(candidate, companyName, designation);
     } catch (err) {
       alert(err.message);
-      sendBtn.disabled = false;
-      sendBtn.textContent = 'Send Offer Letter';
+      markSentBtn.disabled = false;
+      markSentBtn.textContent = 'Mark Offer Sent';
     }
   });
 }
