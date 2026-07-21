@@ -382,3 +382,14 @@ create policy "interviews updatable by hr, admin"
   on interviews for update
   using (current_user_role() in ('hr', 'admin'))
   with check (current_user_role() in ('hr', 'admin'));
+
+-- ── Offer Letter tab: sent-offer record, shown as a summary in that column ──
+grant select, insert on public.offers to authenticated;
+
+create policy "offers readable by hr, admin"
+  on offers for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "offers insertable by hr, admin"
+  on offers for insert
+  with check (current_user_role() in ('hr', 'admin'));

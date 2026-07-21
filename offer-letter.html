@@ -50,6 +50,11 @@
   .offer-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; }
   .offer-table td:first-child { font-weight: 600; }
   .pending { color: var(--muted); font-style: italic; }
+  .offer-form { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+  .offer-form input { padding: 6px 8px; font-size: 11.5px; }
+  .offer-form button { padding: 6px 10px; font-size: 11.5px; }
+  .offer-sent-summary { font-size: 11.5px; line-height: 1.6; }
+  .offer-sent-summary .sent-badge { color: #16a34a; font-weight: 700; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -146,6 +151,115 @@ function renderDesignationList(companyName, companyCandidates) {
   });
 }
 
+function latestOffer(candidate) {
+  const list = candidate.offers || [];
+  if (!list.length) return null;
+  return list.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+}
+
+function renderOfferCell(candidate) {
+  const offer = latestOffer(candidate);
+  if (offer && offer.sent_at) {
+    return `
+      <div class="offer-sent-summary">
+        <div class="sent-badge">✅ Offer Sent</div>
+        Salary: ${offer.salary || '—'}<br>
+        Joining: ${offer.joining_date || '—'}<br>
+        Sent: ${new Date(offer.sent_at).toLocaleDateString()}
+      </div>
+    `;
+  }
+  return `
+    <div class="offer-form">
+      <input type="text" class="offer-salary" placeholder="Salary (e.g. LKR 180,000)" />
+      <input type="date" class="offer-joining-date" />
+      <input type="text" class="offer-benefits" placeholder="Benefits (optional)" />
+      <input type="text" class="offer-notice" placeholder="Notice Period (optional)" />
+      <input type="text" class="offer-probation" placeholder="Probation (optional)" />
+      <button class="btn-primary send-offer-btn">Send Offer Letter</button>
+    </div>
+  `;
+}
+
+function renderOfferRow(candidate, companyName, designation) {
+  return `
+    <tr data-id="${candidate.id}">
+      <td>${candidate.full_name || candidate.email}</td>
+      <td>${cell(candidate.phone)}</td>
+      <td>${cell(candidate.email)}</td>
+      <td>${renderOfferCell(candidate)}</td>
+    </tr>
+  `;
+}
+
+function bindOfferRow(candidate, companyName, designation) {
+  const row = main.querySelector(`tr[data-id="${candidate.id}"]`);
+  if (!row) return;
+
+  const sendBtn = row.querySelector('.send-offer-btn');
+  if (!sendBtn) return;
+
+  sendBtn.addEventListener('click', async () => {
+    const salary = row.querySelector('.offer-salary').value.trim();
+    const joiningDate = row.querySelector('.offer-joining-date').value;
+    const benefits = row.querySelector('.offer-benefits').value.trim();
+    const noticePeriod = row.querySelector('.offer-notice').value.trim();
+    const probation = row.querySelector('.offer-probation').value.trim();
+
+    if (!salary || !joiningDate) {
+      alert('Salary and Joining Date are required.');
+      return;
+    }
+    if (!candidate.email) {
+      alert('This candidate has no email on file.');
+      return;
+    }
+
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<span class="spinner"></span>Sending…';
+    try {
+      const res = await fetch('/.netlify/functions/send-offer-letter', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          candidateEmail: candidate.email,
+          candidateName: candidate.full_name,
+          designation,
+          companyName,
+          salary,
+          joiningDate,
+          benefits,
+          noticePeriod,
+          probation,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error || 'Sending offer letter failed');
+
+      const sentAt = new Date().toISOString();
+      const { error } = await sb.from('offers').insert({
+        candidate_id: candidate.id,
+        designation,
+        salary,
+        joining_date: joiningDate,
+        benefits: benefits || null,
+        notice_period: noticePeriod || null,
+        probation: probation || null,
+        sent_at: sentAt,
+      });
+      if (error) throw error;
+
+      candidate.offers = [{ salary, joining_date: joiningDate, sent_at: sentAt, created_at: sentAt }];
+      row.outerHTML = renderOfferRow(candidate, companyName, designation);
+      bindOfferRow(candidate, companyName, designation);
+    } catch (err) {
+      alert(err.message);
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send Offer Letter';
+    }
+  });
+}
+
 function renderOfferTable(companyName, designation, candidates) {
   pageSubtitle.textContent = `${companyName} · ${designation}`;
 
@@ -164,19 +278,13 @@ function renderOfferTable(companyName, designation, candidates) {
               <th>Candidate</th>
               <th>Phone</th>
               <th>Email</th>
+              <th>Offer Letter</th>
             </tr>
           </thead>
           <tbody>
-            ${candidates.map((c) => `
-              <tr>
-                <td>${c.full_name || c.email}</td>
-                <td>${cell(c.phone)}</td>
-                <td>${cell(c.email)}</td>
-              </tr>
-            `).join('')}
+            ${candidates.map((c) => renderOfferRow(c, companyName, designation)).join('')}
           </tbody>
         </table>
-        <p class="kpi-note">Offer letter generation isn't built yet — this list is the starting point for that next step.</p>
       </section>
     ` : '<p class="kpi-note">No one ready for an offer for this position yet.</p>'}
   `;
@@ -189,6 +297,7 @@ function renderOfferTable(companyName, designation, candidates) {
       renderDesignationList(companyName, companyCandidates);
     });
   }
+  candidates.forEach((c) => bindOfferRow(c, companyName, designation));
 }
 
 async function loadOffers() {
@@ -196,7 +305,7 @@ async function loadOffers() {
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('candidates')
-      .select('id, full_name, email, phone, recruitment_requests(designation, companies(name))')
+      .select('id, full_name, email, phone, recruitment_requests(designation, companies(name)), offers(salary, joining_date, sent_at, created_at)')
       .eq('offer_selection', 'selected')
       .order('applied_at', { ascending: false }),
   ]);
