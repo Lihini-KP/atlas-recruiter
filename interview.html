@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interview — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Interview</h1>
+    <p id="page-subtitle">Candidates selected for interview — schedule, then decide who moves to Offer Letter.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  main { max-width: none; margin: 0; }
+
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .crumb-nav a:hover { text-decoration: underline; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .tile {
+    border-radius: 14px; padding: 22px 20px; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-icon { font-size: 26px; margin-bottom: 10px; }
+  .tile .tile-logo { height: 44px; max-width: 100%; object-fit: contain; object-position: left; margin-bottom: 12px; display: block; }
+  .tile .tile-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .tile .tile-count { font-size: 12.5px; opacity: 0.8; }
+
+  .interview-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12.5px; }
+  .interview-table th, .interview-table td {
+    border: 1px solid var(--border); padding: 10px 14px; text-align: left;
+    overflow-wrap: break-word; vertical-align: top; line-height: 1.45;
+  }
+  .interview-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; }
+  .interview-table td:first-child { font-weight: 600; }
+  .interview-table th:nth-child(1), .interview-table td:nth-child(1) { width: 20%; }
+  .interview-table th:nth-child(2), .interview-table td:nth-child(2) { width: 14%; }
+  .interview-table th:nth-child(3), .interview-table td:nth-child(3) { width: 33%; }
+  .interview-table th:nth-child(4), .interview-table td:nth-child(4) { width: 15%; }
+  .pending { color: var(--muted); font-style: italic; }
+  .schedule-block { display: flex; flex-direction: column; gap: 6px; }
+  .schedule-block input[type="datetime-local"] { padding: 6px 8px; font-size: 11.5px; }
+  .schedule-block button { padding: 6px 10px; font-size: 11.5px; }
+  .scheduled-info { font-size: 11.5px; line-height: 1.5; }
+  .scheduled-info a { color: var(--accent); font-weight: 600; }
+  select.offer-select { width: 100%; padding: 6px 8px; font-size: 11.5px; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script src="lib/company-styles.js"></script>
+<script>
+const APPS_SCRIPT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzXtpw8z03TkI3CGiJLCrJ6u6wUq-WSWDD4xOhio5LGvlkaF9t1YQTRZ3i5WbKwCad7/exec';
+
+const main = document.getElementById('main-content');
+const pageSubtitle = document.getElementById('page-subtitle');
+let allCandidates = [];
+let allCompanies = [];
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+}
+
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
+function renderCrumbs(parts) {
+  return `<div class="crumb-nav">${parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    return isLast ? `<span>${p.label}</span>` : `<a data-nav="${p.nav}">${p.label}</a><span>›</span>`;
+  }).join('')}</div>`;
+}
+
+function renderCompanyList() {
+  pageSubtitle.textContent = 'Choose a company to see candidates selected for interview.';
+  const groups = groupBy(allCandidates, companyOf);
+  const names = allCompanies.map((c) => c.name);
+  if (groups.has('Unassigned')) names.push('Unassigned');
+
+  main.innerHTML = `
+    <div class="tile-grid">
+      ${names.map((name) => {
+        const count = (groups.get(name) || []).length;
+        const s = companyStyleFor(name);
+        return `
+          <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            ${s.logo ? `<img class="tile-logo" src="${s.logo}" alt="${name}" />` : `<div class="tile-icon">📋</div>`}
+            <div class="tile-name">${name}</div>
+            <div class="tile-count">${count} in interview</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  main.querySelectorAll('.tile[data-company]').forEach((tile) => {
+    tile.addEventListener('click', () => renderDesignationList(decodeURIComponent(tile.dataset.company), groups.get(decodeURIComponent(tile.dataset.company)) || []));
+  });
+}
+
+function renderDesignationList(companyName, companyCandidates) {
+  pageSubtitle.textContent = `${companyName} · choose a position.`;
+  const s = companyStyleFor(companyName);
+  const groups = groupBy(companyCandidates, designationOf);
+
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${groups.size ? `
+      <div class="tile-grid">
+        ${Array.from(groups.entries()).map(([designation, items]) => `
+          <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-icon">🎤</div>
+            <div class="tile-name">${designation}</div>
+            <div class="tile-count">${items.length} in interview</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<p class="kpi-note">No one in the interview stage for this company yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  main.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    const designation = decodeURIComponent(tile.dataset.designation);
+    tile.addEventListener('click', () => renderInterviewTable(companyName, designation, groups.get(designation) || []));
+  });
+}
+
+function latestInterview(candidate) {
+  const list = candidate.interviews || [];
+  if (!list.length) return null;
+  return list.slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+}
+
+function cell(value, pendingLabel) {
+  if (value) return value;
+  return `<span class="pending">${pendingLabel || '—'}</span>`;
+}
+
+function renderRow(candidate) {
+  const interview = latestInterview(candidate);
+  const offerSelection = candidate.offer_selection || '';
+
+  const scheduleHtml = interview
+    ? `<div class="scheduled-info">📅 ${interview.scheduled_date} ${interview.scheduled_time || ''}<br>${interview.meeting_link ? `<a href="${interview.meeting_link}" target="_blank">Join Meet</a>` : ''}</div>`
+    : `
+      <div class="schedule-block">
+        <input type="datetime-local" class="schedule-datetime" />
+        <button class="btn-primary schedule-btn">Schedule Interview</button>
+      </div>
+    `;
+
+  return `
+    <tr data-id="${candidate.id}">
+      <td>${candidate.full_name || candidate.email}<div class="pending" style="font-style:normal">${candidate.recruitment_requests?.designation || ''}</div></td>
+      <td>${cell(candidate.phone, 'Not stated on CV')}</td>
+      <td>${scheduleHtml}</td>
+      <td>
+        <select class="offer-select">
+          <option value="" ${offerSelection === '' ? 'selected' : ''}>—</option>
+          <option value="selected" ${offerSelection === 'selected' ? 'selected' : ''}>Selected</option>
+          <option value="not_selected" ${offerSelection === 'not_selected' ? 'selected' : ''}>Not Selected</option>
+        </select>
+      </td>
+    </tr>
+  `;
+}
+
+function bindRow(candidate) {
+  const row = main.querySelector(`tr[data-id="${candidate.id}"]`);
+  if (!row) return;
+
+  const scheduleBtn = row.querySelector('.schedule-btn');
+  if (scheduleBtn) {
+    scheduleBtn.addEventListener('click', async () => {
+      const input = row.querySelector('.schedule-datetime');
+      if (!input.value) { alert('Pick a date and time first.'); return; }
+      if (!candidate.email) { alert('This candidate has no email on file.'); return; }
+
+      scheduleBtn.disabled = true;
+      scheduleBtn.innerHTML = '<span class="spinner"></span>Scheduling…';
+      try {
+        const startIso = new Date(input.value).toISOString();
+        const res = await fetch(APPS_SCRIPT_WEBAPP_URL, {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'scheduleInterview',
+            candidateEmail: candidate.email,
+            candidateName: candidate.full_name,
+            startIso,
+            durationMinutes: 30,
+          }),
+        });
+        const payload = await res.json();
+        if (!payload.ok) throw new Error(payload.error || 'Scheduling failed');
+
+        const start = new Date(payload.start);
+        const { error } = await sb.from('interviews').insert({
+          candidate_id: candidate.id,
+          interview_type: 'Online',
+          scheduled_date: start.toISOString().slice(0, 10),
+          scheduled_time: start.toTimeString().slice(0, 8),
+          meeting_link: payload.meetingLink,
+        });
+        if (error) throw error;
+
+        candidate.interviews = [{
+          scheduled_date: start.toISOString().slice(0, 10),
+          scheduled_time: start.toTimeString().slice(0, 8),
+          meeting_link: payload.meetingLink,
+          created_at: new Date().toISOString(),
+        }];
+        row.outerHTML = renderRow(candidate);
+        bindRow(candidate);
+      } catch (err) {
+        alert(err.message);
+        scheduleBtn.disabled = false;
+        scheduleBtn.textContent = 'Schedule Interview';
+      }
+    });
+  }
+
+  const offerSelect = row.querySelector('.offer-select');
+  if (offerSelect) {
+    offerSelect.addEventListener('change', async () => {
+      const value = offerSelect.value || null;
+      offerSelect.disabled = true;
+      const { error } = await sb.from('candidates').update({ offer_selection: value }).eq('id', candidate.id);
+      offerSelect.disabled = false;
+      if (error) { alert(error.message); return; }
+      candidate.offer_selection = value;
+    });
+  }
+}
+
+function renderInterviewTable(companyName, designation, candidates) {
+  pageSubtitle.textContent = `${companyName} · ${designation}`;
+
+  main.innerHTML = `
+    ${renderCrumbs([
+      { label: 'Companies', nav: 'companies' },
+      { label: companyName, nav: 'company', company: companyName },
+      { label: designation },
+    ])}
+    <h2 style="margin:0 0 14px">${designation}</h2>
+    ${candidates.length ? `
+      <section class="panel">
+        <table class="interview-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Phone</th>
+              <th>Interview</th>
+              <th>Selected for Offer?</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${candidates.map(renderRow).join('')}
+          </tbody>
+        </table>
+      </section>
+    ` : '<p class="kpi-note">No one in the interview stage for this position yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  const companyCrumb = main.querySelector('[data-nav="company"]');
+  if (companyCrumb) {
+    companyCrumb.addEventListener('click', () => {
+      const companyCandidates = allCandidates.filter((c) => companyOf(c) === companyName);
+      renderDesignationList(companyName, companyCandidates);
+    });
+  }
+  candidates.forEach(bindRow);
+}
+
+async function loadInterviews() {
+  const [companiesRes, candidatesRes] = await Promise.all([
+    sb.from('companies').select('id, name').order('name'),
+    sb
+      .from('candidates')
+      .select('id, full_name, email, phone, offer_selection, recruitment_requests(designation, companies(name)), interviews(scheduled_date, scheduled_time, meeting_link, created_at)')
+      .eq('interview_selection', 'selected')
+      .order('applied_at', { ascending: false }),
+  ]);
+
+  if (companiesRes.error) {
+    main.innerHTML = `<div class="status error">${companiesRes.error.message}</div>`;
+    return;
+  }
+  if (candidatesRes.error) {
+    main.innerHTML = `<div class="status error">${candidatesRes.error.message}</div>`;
+    return;
+  }
+
+  allCompanies = companiesRes.data;
+  allCandidates = candidatesRes.data;
+
+  if (!allCandidates.length) {
+    main.innerHTML = '<p class="kpi-note">No one selected for interview yet — mark someone "Selected" under Interview Selection in the Candidate Pipeline tab.</p>';
+    return;
+  }
+
+  renderCompanyList();
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('interview.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadInterviews();
+});
+</script>
+
+</body>
+</html>

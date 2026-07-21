@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Offer Letter — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Offer Letter</h1>
+    <p id="page-subtitle">Candidates selected after interview, ready for an offer.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  main { max-width: none; margin: 0; }
+
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .crumb-nav a:hover { text-decoration: underline; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  .tile {
+    border-radius: 14px; padding: 22px 20px; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-icon { font-size: 26px; margin-bottom: 10px; }
+  .tile .tile-logo { height: 44px; max-width: 100%; object-fit: contain; object-position: left; margin-bottom: 12px; display: block; }
+  .tile .tile-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .tile .tile-count { font-size: 12.5px; opacity: 0.8; }
+
+  .offer-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12.5px; }
+  .offer-table th, .offer-table td {
+    border: 1px solid var(--border); padding: 10px 14px; text-align: left;
+    overflow-wrap: break-word; vertical-align: top; line-height: 1.45;
+  }
+  .offer-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; }
+  .offer-table td:first-child { font-weight: 600; }
+  .pending { color: var(--muted); font-style: italic; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script src="lib/company-styles.js"></script>
+<script>
+const main = document.getElementById('main-content');
+const pageSubtitle = document.getElementById('page-subtitle');
+let allCandidates = [];
+let allCompanies = [];
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || 'Unassigned';
+}
+
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
+function renderCrumbs(parts) {
+  return `<div class="crumb-nav">${parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    return isLast ? `<span>${p.label}</span>` : `<a data-nav="${p.nav}">${p.label}</a><span>›</span>`;
+  }).join('')}</div>`;
+}
+
+function cell(value, pendingLabel) {
+  if (value) return value;
+  return `<span class="pending">${pendingLabel || '—'}</span>`;
+}
+
+function renderCompanyList() {
+  pageSubtitle.textContent = 'Choose a company to see candidates ready for an offer.';
+  const groups = groupBy(allCandidates, companyOf);
+  const names = allCompanies.map((c) => c.name);
+  if (groups.has('Unassigned')) names.push('Unassigned');
+
+  main.innerHTML = `
+    <div class="tile-grid">
+      ${names.map((name) => {
+        const count = (groups.get(name) || []).length;
+        const s = companyStyleFor(name);
+        return `
+          <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            ${s.logo ? `<img class="tile-logo" src="${s.logo}" alt="${name}" />` : `<div class="tile-icon">📋</div>`}
+            <div class="tile-name">${name}</div>
+            <div class="tile-count">${count} ready for offer</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  main.querySelectorAll('.tile[data-company]').forEach((tile) => {
+    tile.addEventListener('click', () => renderDesignationList(decodeURIComponent(tile.dataset.company), groups.get(decodeURIComponent(tile.dataset.company)) || []));
+  });
+}
+
+function renderDesignationList(companyName, companyCandidates) {
+  pageSubtitle.textContent = `${companyName} · choose a position.`;
+  const s = companyStyleFor(companyName);
+  const groups = groupBy(companyCandidates, designationOf);
+
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${groups.size ? `
+      <div class="tile-grid">
+        ${Array.from(groups.entries()).map(([designation, items]) => `
+          <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-icon">📄</div>
+            <div class="tile-name">${designation}</div>
+            <div class="tile-count">${items.length} ready for offer</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<p class="kpi-note">No one ready for an offer for this company yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  main.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    const designation = decodeURIComponent(tile.dataset.designation);
+    tile.addEventListener('click', () => renderOfferTable(companyName, designation, groups.get(designation) || []));
+  });
+}
+
+function renderOfferTable(companyName, designation, candidates) {
+  pageSubtitle.textContent = `${companyName} · ${designation}`;
+
+  main.innerHTML = `
+    ${renderCrumbs([
+      { label: 'Companies', nav: 'companies' },
+      { label: companyName, nav: 'company', company: companyName },
+      { label: designation },
+    ])}
+    <h2 style="margin:0 0 14px">${designation}</h2>
+    ${candidates.length ? `
+      <section class="panel">
+        <table class="offer-table">
+          <thead>
+            <tr>
+              <th>Candidate</th>
+              <th>Phone</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${candidates.map((c) => `
+              <tr>
+                <td>${c.full_name || c.email}</td>
+                <td>${cell(c.phone)}</td>
+                <td>${cell(c.email)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <p class="kpi-note">Offer letter generation isn't built yet — this list is the starting point for that next step.</p>
+      </section>
+    ` : '<p class="kpi-note">No one ready for an offer for this position yet.</p>'}
+  `;
+
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+  const companyCrumb = main.querySelector('[data-nav="company"]');
+  if (companyCrumb) {
+    companyCrumb.addEventListener('click', () => {
+      const companyCandidates = allCandidates.filter((c) => companyOf(c) === companyName);
+      renderDesignationList(companyName, companyCandidates);
+    });
+  }
+}
+
+async function loadOffers() {
+  const [companiesRes, candidatesRes] = await Promise.all([
+    sb.from('companies').select('id, name').order('name'),
+    sb
+      .from('candidates')
+      .select('id, full_name, email, phone, recruitment_requests(designation, companies(name))')
+      .eq('offer_selection', 'selected')
+      .order('applied_at', { ascending: false }),
+  ]);
+
+  if (companiesRes.error) {
+    main.innerHTML = `<div class="status error">${companiesRes.error.message}</div>`;
+    return;
+  }
+  if (candidatesRes.error) {
+    main.innerHTML = `<div class="status error">${candidatesRes.error.message}</div>`;
+    return;
+  }
+
+  allCompanies = companiesRes.data;
+  allCandidates = candidatesRes.data;
+
+  if (!allCandidates.length) {
+    main.innerHTML = '<p class="kpi-note">No one ready for an offer yet — mark someone "Selected" under Selected for Offer? in the Interview tab.</p>';
+    return;
+  }
+
+  renderCompanyList();
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('offer-letter.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadOffers();
+});
+</script>
+
+</body>
+</html>
