@@ -25,8 +25,9 @@
 </main>
 
 <style>
-  /* This page's table needs much more room than the shared 900px content width. */
-  main { max-width: 1440px; }
+  /* This page's table needs the full content width, not the shared 900px cap
+     (which left large unused margins on wider screens). */
+  main { max-width: none; margin: 0; }
 
   .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
   .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
