@@ -473,3 +473,14 @@ create policy "manual_folders deletable by admin only"
   using (current_user_role() = 'admin');
 
 grant delete on public.manual_folders to authenticated;
+
+-- ── Advertisement tab: admin-only delete of a generated poster (DB row + storage file)
+create policy "advertisements deletable by admin only"
+  on advertisements for delete
+  using (current_user_role() = 'admin');
+
+grant delete on public.advertisements to authenticated;
+
+create policy "admin can delete from advertisements bucket"
+  on storage.objects for delete
+  using (bucket_id = 'advertisements' and current_user_role() = 'admin');
