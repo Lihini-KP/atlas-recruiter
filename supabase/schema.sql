@@ -365,6 +365,9 @@ alter table candidates add column if not exists cv_analyzed_at timestamptz;
 -- ── Candidate Pipeline: interview selection + scheduling ─────────────────────
 alter table candidates add column if not exists interview_selection text; -- 'selected' | 'not_selected'
 
+-- ── Interview tab: post-interview decision, routes to Offer Letter tab ───────
+alter table candidates add column if not exists offer_selection text; -- 'selected' | 'not_selected'
+
 grant select, insert, update on public.interviews to authenticated;
 
 create policy "interviews readable by hr, admin"
