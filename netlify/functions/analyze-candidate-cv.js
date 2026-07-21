@@ -91,8 +91,9 @@ exports.handler = async (event) => {
     }
 
     const claudeData = await claudeRes.json();
-    const text = claudeData.content?.[0]?.text || '{}';
-    const extracted = JSON.parse(text);
+    const rawText = claudeData.content?.[0]?.text || '{}';
+    const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const extracted = JSON.parse(jsonText);
 
     const updateRes = await supabaseFetch(`/rest/v1/candidates?id=eq.${candidateId}`, {
       method: 'PATCH',
