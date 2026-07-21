@@ -46,6 +46,17 @@
   .folder-group h3 { font-size: 14px; margin: 0 0 8px; }
   .new-folder-inline { display: none; gap: 8px; align-items: center; }
   .new-folder-inline select, .new-folder-inline input { max-width: 170px; font-size: 12.5px; padding: 6px 8px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 10px; }
+  .tile {
+    border-radius: 14px; padding: 18px; cursor: pointer; border: 2px solid var(--border); background: var(--bg);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+  .tile .tile-count { font-size: 12px; color: var(--muted); }
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+  .crumb-nav a { color: var(--accent); cursor: pointer; text-decoration: none; }
+  .crumb-nav a:hover { text-decoration: underline; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -157,24 +168,55 @@ function wireAssignControl(row, onAssigned) {
   });
 }
 
-async function loadUnmatched() {
-  const { data, error } = await sb
-    .from('candidates')
-    .select('*')
-    .eq('status', 'unmatched')
-    .order('applied_at', { ascending: false });
+let unmatchedCandidates = [];
 
-  if (error) {
-    unmatchedList.innerHTML = `<div class="status error">${error.message}</div>`;
-    return;
-  }
+// Mirrors extractDesignationFromSubject() in google-apps-script/cv-import.gs, so the
+// guessed designation shown here matches what the thank-you email referenced.
+function guessDesignation(subject) {
+  if (!subject) return 'Unspecified / Other';
+  let s = subject.trim();
+  const prefixes = [
+    /^cv\s+submission\s+for\s+/i,
+    /^cv\s+for\s+/i,
+    /^application\s+for\s+/i,
+    /^job\s+application\s+for\s+/i,
+    /^re:\s*/i,
+  ];
+  prefixes.forEach((p) => { s = s.replace(p, ''); });
+  s = s.replace(/\s*[-–—]\s*[A-Z][a-zA-Z.'\s]{2,40}$/, '').trim();
+  return s || 'Unspecified / Other';
+}
 
-  if (!data.length) {
-    unmatchedList.innerHTML = '<p class="kpi-note">Nothing waiting on review.</p>';
-    return;
-  }
+function renderUnmatchedTiles() {
+  const groups = groupBy(unmatchedCandidates, (c) => guessDesignation(c.source_subject));
 
-  const rows = await Promise.all(data.map(async (c) => {
+  unmatchedList.innerHTML = `
+    <div class="tile-grid">
+      ${Array.from(groups.entries()).map(([designation, items]) => `
+        <div class="tile" data-designation="${encodeURIComponent(designation)}">
+          <div class="tile-name">${designation}</div>
+          <div class="tile-count">${items.length} CV${items.length === 1 ? '' : 's'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  unmatchedList.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    tile.addEventListener('click', () => renderUnmatchedRows(decodeURIComponent(tile.dataset.designation)));
+  });
+}
+
+async function renderUnmatchedRows(designation) {
+  const items = unmatchedCandidates.filter((c) => guessDesignation(c.source_subject) === designation);
+
+  unmatchedList.innerHTML = `
+    <div class="crumb-nav"><a data-nav="unmatched-designations">All designations</a><span>›</span><span>${designation}</span></div>
+    <div id="unmatched-rows"></div>
+  `;
+  unmatchedList.querySelector('[data-nav="unmatched-designations"]').addEventListener('click', renderUnmatchedTiles);
+
+  const rowsContainer = unmatchedList.querySelector('#unmatched-rows');
+  const rows = await Promise.all(items.map(async (c) => {
     const url = await cvSignedUrl(c.cv_storage_path);
     return `
       <div class="cv-row" data-id="${c.id}">
@@ -188,10 +230,10 @@ async function loadUnmatched() {
     `;
   }));
 
-  unmatchedList.innerHTML = rows.join('');
+  rowsContainer.innerHTML = rows.join('');
 
-  data.forEach((c) => {
-    const row = unmatchedList.querySelector(`.cv-row[data-id="${c.id}"]`);
+  items.forEach((c) => {
+    const row = rowsContainer.querySelector(`.cv-row[data-id="${c.id}"]`);
     wireAssignControl(row, async (fields) => {
       const { error: updateError } = await sb
         .from('candidates')
@@ -203,11 +245,37 @@ async function loadUnmatched() {
         return;
       }
 
-      row.remove();
+      unmatchedCandidates = unmatchedCandidates.filter((u) => u.id !== c.id);
       loadFiled();
-      if (!unmatchedList.querySelector('.cv-row')) unmatchedList.innerHTML = '<p class="kpi-note">Nothing waiting on review.</p>';
+      if (unmatchedCandidates.filter((u) => guessDesignation(u.source_subject) === designation).length === 0) {
+        renderUnmatchedTiles();
+      } else {
+        renderUnmatchedRows(designation);
+      }
     });
   });
+}
+
+async function loadUnmatched() {
+  const { data, error } = await sb
+    .from('candidates')
+    .select('*')
+    .eq('status', 'unmatched')
+    .order('applied_at', { ascending: false });
+
+  if (error) {
+    unmatchedList.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  unmatchedCandidates = data;
+
+  if (!data.length) {
+    unmatchedList.innerHTML = '<p class="kpi-note">Nothing waiting on review.</p>';
+    return;
+  }
+
+  renderUnmatchedTiles();
 }
 
 function groupBy(items, keyFn) {
