@@ -288,6 +288,83 @@ function groupBy(items, keyFn) {
   return map;
 }
 
+let filedCandidates = [];
+
+function filedGroupKey(c) {
+  const r = c.recruitment_requests;
+  const mf = c.manual_folders;
+  if (r) return `${r.companies?.name || '—'} / ${r.department} / ${r.designation}`;
+  if (mf) return `${mf.companies?.name || '—'} / ${mf.designation} (manual folder)`;
+  return 'Unassigned';
+}
+
+function renderFiledTiles() {
+  const groups = groupBy(filedCandidates, filedGroupKey);
+
+  filedList.innerHTML = `
+    <div class="tile-grid">
+      ${Array.from(groups.entries()).map(([groupKey, items]) => `
+        <div class="tile" data-group="${encodeURIComponent(groupKey)}">
+          <div class="tile-name">${groupKey}</div>
+          <div class="tile-count">${items.length} candidate${items.length === 1 ? '' : 's'}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  filedList.querySelectorAll('.tile[data-group]').forEach((tile) => {
+    tile.addEventListener('click', () => renderFiledRows(decodeURIComponent(tile.dataset.group)));
+  });
+}
+
+async function renderFiledRows(groupKey) {
+  const items = filedCandidates.filter((c) => filedGroupKey(c) === groupKey);
+  const isUnassigned = groupKey === 'Unassigned';
+
+  filedList.innerHTML = `
+    <div class="crumb-nav"><a data-nav="filed-groups">All positions</a><span>›</span><span>${groupKey}</span></div>
+    <div id="filed-rows"></div>
+  `;
+  filedList.querySelector('[data-nav="filed-groups"]').addEventListener('click', renderFiledTiles);
+
+  const rowsContainer = filedList.querySelector('#filed-rows');
+  const rows = await Promise.all(items.map(async (c) => {
+    const url = await cvSignedUrl(c.cv_storage_path);
+    return `
+      <div class="cv-row" data-filed-id="${c.id}">
+        <div class="cv-info">
+          <div class="cv-name">${c.full_name || c.email || 'Unknown'}</div>
+          <div class="cv-meta">${c.email || ''} · Status: ${c.status} · ${new Date(c.applied_at).toLocaleDateString()}</div>
+        </div>
+        <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
+        ${isUnassigned ? assignControlHTML(c.id) : ''}
+      </div>
+    `;
+  }));
+
+  rowsContainer.innerHTML = rows.join('');
+
+  if (isUnassigned) {
+    items.forEach((c) => {
+      const row = rowsContainer.querySelector(`.cv-row[data-filed-id="${c.id}"]`);
+      if (!row) return;
+      wireAssignControl(row, async (fields) => {
+        const { error: updateError } = await sb
+          .from('candidates')
+          .update(fields)
+          .eq('id', c.id);
+
+        if (updateError) {
+          alert(updateError.message);
+          return;
+        }
+
+        await loadFiled();
+      });
+    });
+  }
+}
+
 async function loadFiled() {
   const { data, error } = await sb
     .from('candidates')
@@ -300,57 +377,14 @@ async function loadFiled() {
     return;
   }
 
+  filedCandidates = data;
+
   if (!data.length) {
     filedList.innerHTML = '<p class="kpi-note">No candidates filed yet.</p>';
     return;
   }
 
-  const groups = groupBy(data, (c) => {
-    const r = c.recruitment_requests;
-    const mf = c.manual_folders;
-    if (r) return `${r.companies?.name || '—'} / ${r.department} / ${r.designation}`;
-    if (mf) return `${mf.companies?.name || '—'} / ${mf.designation} (manual folder)`;
-    return 'Unassigned';
-  });
-
-  const sections = await Promise.all(Array.from(groups.entries()).map(async ([groupKey, candidates]) => {
-    const isUnassigned = groupKey === 'Unassigned';
-    const rows = await Promise.all(candidates.map(async (c) => {
-      const url = await cvSignedUrl(c.cv_storage_path);
-      return `
-        <div class="cv-row" data-filed-id="${c.id}">
-          <div class="cv-info">
-            <div class="cv-name">${c.full_name || c.email || 'Unknown'}</div>
-            <div class="cv-meta">${c.email || ''} · Status: ${c.status} · ${new Date(c.applied_at).toLocaleDateString()}</div>
-          </div>
-          <a href="${url}" target="_blank" class="btn-secondary" style="text-decoration:none;padding:8px 14px;font-size:12.5px">View CV</a>
-          ${isUnassigned ? assignControlHTML(c.id) : ''}
-        </div>
-      `;
-    }));
-    return `<div class="folder-group"><h3>${groupKey}</h3>${rows.join('')}</div>`;
-  }));
-
-  filedList.innerHTML = sections.join('');
-
-  data.forEach((c) => {
-    if (c.recruitment_requests || c.manual_folders) return;
-    const row = filedList.querySelector(`.cv-row[data-filed-id="${c.id}"]`);
-    if (!row) return;
-    wireAssignControl(row, async (fields) => {
-      const { error: updateError } = await sb
-        .from('candidates')
-        .update(fields)
-        .eq('id', c.id);
-
-      if (updateError) {
-        alert(updateError.message);
-        return;
-      }
-
-      loadFiled();
-    });
-  });
+  renderFiledTiles();
 }
 
 window.authReady.then(async (profile) => {
