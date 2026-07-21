@@ -25,20 +25,16 @@
 </main>
 
 <style>
-  .candidate-card {
-    border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 18px 20px; margin-bottom: 14px; background: var(--panel);
+  .pipeline-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 13px; }
+  .pipeline-table th, .pipeline-table td {
+    border: 1px solid var(--border); padding: 9px 14px; text-align: left;
+    overflow-wrap: break-word; vertical-align: top;
   }
-  .candidate-card .top-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-  .candidate-card .name { font-size: 16px; font-weight: 700; }
-  .candidate-card .position { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
-  .candidate-card .fields {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 12px; margin-top: 14px;
-  }
-  .candidate-card .field label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
-  .candidate-card .field .value { font-size: 13.5px; font-weight: 600; }
-  .candidate-card .field .value.pending { font-weight: 400; color: var(--muted); font-style: italic; }
+  .pipeline-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 12px; }
+  .pipeline-table td:first-child { font-weight: 600; }
+  .pipeline-table .pending { color: var(--muted); font-style: italic; }
+  .pipeline-table .row-actions { display: flex; flex-direction: column; gap: 6px; }
+  .pipeline-table .row-actions button { padding: 6px 10px; font-size: 12px; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -46,21 +42,12 @@
 <script src="lib/sidebar.js"></script>
 <script>
 const main = document.getElementById('main-content');
+let pipelineCandidates = [];
 
 function latestAssessment(candidate) {
   const list = candidate.assessments || [];
   if (!list.length) return null;
   return list.slice().sort((a, b) => new Date(b.submitted_at) - new Date(a.submitted_at))[0].answers;
-}
-
-function fieldHtml(label, value, pendingLabel) {
-  const isPending = !value;
-  return `
-    <div class="field">
-      <label>${label}</label>
-      <div class="value${isPending ? ' pending' : ''}">${isPending ? (pendingLabel || 'Not available') : value}</div>
-    </div>
-  `;
 }
 
 async function cvSignedUrl(path) {
@@ -69,33 +56,77 @@ async function cvSignedUrl(path) {
   return data?.signedUrl || null;
 }
 
-function renderCard(candidate) {
+function cell(value, pendingLabel) {
+  if (value) return value;
+  return `<span class="pending">${pendingLabel || '—'}</span>`;
+}
+
+function renderRow(candidate) {
   const answers = latestAssessment(candidate) || {};
   const r = candidate.recruitment_requests;
   const position = r ? `${r.companies?.name || '—'} · ${r.designation}` : 'Position not assigned';
   const analyzed = !!candidate.cv_analyzed_at;
+  const noticePeriod = answers.currentlyEmployed === 'Yes'
+    ? answers.noticePeriod
+    : (answers.currentlyEmployed === 'No' ? 'Immediately available' : null);
 
   return `
-    <div class="candidate-card" data-id="${candidate.id}">
-      <div class="top-row">
-        <div>
-          <div class="name">${candidate.full_name || candidate.email}</div>
-          <div class="position">${position}</div>
+    <tr data-id="${candidate.id}">
+      <td>${candidate.full_name || candidate.email}<div class="pending" style="font-style:normal">${position}</div></td>
+      <td>${cell(candidate.location, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
+      <td>${cell(candidate.education, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
+      <td>${cell(candidate.experience_summary, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}</td>
+      <td>${cell(answers.expectedSalary)}</td>
+      <td>${cell(noticePeriod)}</td>
+      <td>
+        <div class="row-actions">
+          ${candidate.cv_storage_path ? `<button class="btn-secondary view-cv-btn">View CV</button>` : ''}
+          ${!analyzed && candidate.cv_storage_path ? `<button class="btn-primary analyze-btn">Analyze CV</button>` : ''}
         </div>
-        <div class="actions" style="margin-top:0">
-          ${candidate.cv_storage_path ? `<button class="btn-secondary view-cv-btn" style="padding:8px 14px;font-size:12.5px">View CV</button>` : ''}
-          ${!analyzed && candidate.cv_storage_path ? `<button class="btn-primary analyze-btn" style="padding:8px 14px;font-size:12.5px">Analyze CV</button>` : ''}
-        </div>
-      </div>
-      <div class="fields">
-        ${fieldHtml('Location', candidate.location, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
-        ${fieldHtml('Education', candidate.education, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
-        ${fieldHtml('Experience', candidate.experience_summary, analyzed ? 'Not stated on CV' : 'Click "Analyze CV"')}
-        ${fieldHtml('Salary Expectation', answers.expectedSalary)}
-        ${fieldHtml('Notice Period', answers.currentlyEmployed === 'Yes' ? answers.noticePeriod : (answers.currentlyEmployed === 'No' ? 'Immediately available' : null))}
-      </div>
-    </div>
+      </td>
+    </tr>
   `;
+}
+
+function bindRow(candidate) {
+  const row = main.querySelector(`tr[data-id="${candidate.id}"]`);
+  if (!row) return;
+
+  const viewBtn = row.querySelector('.view-cv-btn');
+  if (viewBtn) {
+    viewBtn.addEventListener('click', async () => {
+      const url = await cvSignedUrl(candidate.cv_storage_path);
+      if (url) window.open(url, '_blank');
+    });
+  }
+
+  const analyzeBtn = row.querySelector('.analyze-btn');
+  if (analyzeBtn) {
+    analyzeBtn.addEventListener('click', async () => {
+      analyzeBtn.disabled = true;
+      analyzeBtn.innerHTML = '<span class="spinner"></span>Analyzing…';
+      try {
+        const res = await fetch('/.netlify/functions/analyze-candidate-cv', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ candidateId: candidate.id }),
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error || 'Analysis failed');
+
+        candidate.location = payload.candidate.location;
+        candidate.education = payload.candidate.education;
+        candidate.experience_summary = payload.candidate.experience_summary;
+        candidate.cv_analyzed_at = payload.candidate.cv_analyzed_at;
+        row.outerHTML = renderRow(candidate);
+        bindRow(candidate);
+      } catch (err) {
+        alert(err.message);
+        analyzeBtn.disabled = false;
+        analyzeBtn.textContent = 'Analyze CV';
+      }
+    });
+  }
 }
 
 async function loadPipeline() {
@@ -115,58 +146,30 @@ async function loadPipeline() {
     return;
   }
 
-  main.innerHTML = `<section class="panel">${data.map(renderCard).join('')}</section>`;
+  pipelineCandidates = data;
 
-  data.forEach((candidate) => {
-    const card = main.querySelector(`.candidate-card[data-id="${candidate.id}"]`);
+  main.innerHTML = `
+    <section class="panel">
+      <table class="pipeline-table">
+        <thead>
+          <tr>
+            <th>Candidate</th>
+            <th>Location</th>
+            <th>Education</th>
+            <th>Experience</th>
+            <th>Salary Expectation</th>
+            <th>Notice Period</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(renderRow).join('')}
+        </tbody>
+      </table>
+    </section>
+  `;
 
-    const viewBtn = card.querySelector('.view-cv-btn');
-    if (viewBtn) {
-      viewBtn.addEventListener('click', async () => {
-        const url = await cvSignedUrl(candidate.cv_storage_path);
-        if (url) window.open(url, '_blank');
-      });
-    }
-
-    const analyzeBtn = card.querySelector('.analyze-btn');
-    if (analyzeBtn) {
-      analyzeBtn.addEventListener('click', async () => {
-        analyzeBtn.disabled = true;
-        analyzeBtn.innerHTML = '<span class="spinner"></span>Analyzing…';
-        try {
-          const res = await fetch('/.netlify/functions/analyze-candidate-cv', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ candidateId: candidate.id }),
-          });
-          const payload = await res.json();
-          if (!res.ok) throw new Error(payload.error || 'Analysis failed');
-
-          candidate.location = payload.candidate.location;
-          candidate.education = payload.candidate.education;
-          candidate.experience_summary = payload.candidate.experience_summary;
-          candidate.cv_analyzed_at = payload.candidate.cv_analyzed_at;
-          card.outerHTML = renderCard(candidate);
-          bindCard(candidate);
-        } catch (err) {
-          alert(err.message);
-          analyzeBtn.disabled = false;
-          analyzeBtn.textContent = 'Analyze CV';
-        }
-      });
-    }
-  });
-
-  function bindCard(candidate) {
-    const card = main.querySelector(`.candidate-card[data-id="${candidate.id}"]`);
-    const viewBtn = card.querySelector('.view-cv-btn');
-    if (viewBtn) {
-      viewBtn.addEventListener('click', async () => {
-        const url = await cvSignedUrl(candidate.cv_storage_path);
-        if (url) window.open(url, '_blank');
-      });
-    }
-  }
+  data.forEach(bindRow);
 }
 
 window.authReady.then((profile) => {
