@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Advertisement — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,7 +46,7 @@
     background: rgba(0,0,0,0.55); color: #fff; font-size: 13px; line-height: 1; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
   }
-  .ad-delete-btn:hover { background: #dc2626; }
+  .ad-delete-btn:hover { background: var(--red); }
 </style>
 
 <script src="lib/supabase-client.js"></script>

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Candidate Assessment — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -49,14 +50,14 @@
     background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10.5px;
     text-transform: uppercase; letter-spacing: 0.04em; border-top: 1px solid var(--border);
   }
-  .assessment-table tbody tr:nth-child(even) td { background: rgba(120,120,140,0.045); }
-  .assessment-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
+  .assessment-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
+  .assessment-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .assessment-table td:first-child { font-weight: 600; }
   .shortlist-btn {
     padding: 5px 11px; font-size: 11px; border-radius: 999px; border: 1px solid var(--border);
     background: var(--bg); cursor: pointer; color: var(--text);
   }
-  .shortlist-btn.active { background: #2e7d32; border-color: #2e7d32; color: white; }
+  .shortlist-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
 </style>
 
 <script src="lib/supabase-client.js"></script>

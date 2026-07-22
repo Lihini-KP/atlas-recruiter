@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Interview — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -51,8 +52,8 @@
     background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10px;
     text-transform: uppercase; letter-spacing: 0.03em; border-top: 1px solid var(--border);
   }
-  .interview-table tbody tr:nth-child(even) td { background: rgba(120,120,140,0.045); }
-  .interview-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
+  .interview-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
+  .interview-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .interview-table td:first-child { font-weight: 600; }
   .interview-table th:nth-child(1), .interview-table td:nth-child(1) { width: 20%; }
   .interview-table th:nth-child(2), .interview-table td:nth-child(2) { width: 14%; }

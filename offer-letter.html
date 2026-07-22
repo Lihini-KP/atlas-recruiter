@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Offer Letter — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -51,8 +52,8 @@
     background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10px;
     text-transform: uppercase; letter-spacing: 0.03em; border-top: 1px solid var(--border);
   }
-  .offer-table tbody tr:nth-child(even) td { background: rgba(120,120,140,0.045); }
-  .offer-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
+  .offer-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
+  .offer-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .offer-table td:first-child { font-weight: 600; }
   .pending { color: var(--muted); font-style: italic; }
   .offer-form { display: flex; flex-direction: column; gap: 6px; min-width: 220px; }
@@ -62,7 +63,7 @@
   .offer-form .offer-form-actions { display: flex; gap: 6px; }
   .offer-form .offer-form-actions button { flex: 1; }
   .offer-sent-summary { font-size: 11.5px; line-height: 1.6; }
-  .offer-sent-summary .sent-badge { color: #16a34a; font-weight: 700; }
+  .offer-sent-summary .sent-badge { color: var(--accent); font-weight: 700; }
 </style>
 
 <script src="lib/supabase-client.js"></script>

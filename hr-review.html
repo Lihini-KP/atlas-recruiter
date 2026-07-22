@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>HR Review — ATLAS Recruitment</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -51,7 +52,7 @@ function renderRequest(r) {
       <div class="actions">
         <button class="btn-primary" data-action="approved">Approve</button>
         <button class="btn-secondary" data-action="on_hold">Put On Hold</button>
-        <button class="btn-secondary" data-action="rejected" style="color:#dc2626">Reject</button>
+        <button class="btn-secondary" data-action="rejected" style="color:var(--red)">Reject</button>
       </div>
       <div class="status hidden"></div>
     </section>

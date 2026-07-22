@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Recruitment Dashboard — ATLAS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -45,11 +46,11 @@
 <style>
   .kpi-tile { cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease; }
   .kpi-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.1); border-color: var(--accent); }
-  .kpi-tile.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(79,70,229,0.15); }
+  .kpi-tile.active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
   .detail-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
   .detail-table th, .detail-table td { border-bottom: 1px solid var(--border); padding: 8px 12px; text-align: left; }
   .detail-table th { background: var(--bg); font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
-  .detail-table tbody tr:hover td { background: rgba(79,70,229,0.06); }
+  .detail-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
 </style>
 
 <script src="lib/supabase-client.js"></script>
