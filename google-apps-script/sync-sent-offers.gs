@@ -72,7 +72,7 @@ function syncSentOffers() {
     Logger.log('Recorded: ' + recorded + ', skipped (no matching sent email found): ' + skipped);
     reportRun_('atlas-recruiter-offer-sync', 'success', 'synced ' + recorded + ' offers', { synced: recorded });
   } catch (err) {
-    reportRun_('atlas-recruiter-offer-sync', 'failed', 'Offer sync failed: ' + err.message, { synced: recorded });
+    reportRun_('atlas-recruiter-offer-sync', 'failed', 'Offer sync failed: ' + err.message, { synced: recorded }, (err && err.message) ? err.message : String(err));
     throw err;
   }
 }

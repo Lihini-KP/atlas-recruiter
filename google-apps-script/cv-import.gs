@@ -115,7 +115,7 @@ function importCvsFromGmail() {
     reportRun_('atlas-recruiter-cv-import', 'success', 'imported ' + imported + ', skipped ' + skipped, { imported: imported, skipped: skipped });
   } catch (err) {
     const skipped = skippedDup + skippedNonApp;
-    reportRun_('atlas-recruiter-cv-import', 'failed', 'CV import failed: ' + err.message, { imported: imported, skipped: skipped });
+    reportRun_('atlas-recruiter-cv-import', 'failed', 'CV import failed: ' + err.message, { imported: imported, skipped: skipped }, (err && err.message) ? err.message : String(err));
     throw err;
   }
 }
@@ -124,19 +124,22 @@ function importCvsFromGmail() {
 // (netlify/functions/_lib/agent-report.mjs in the spine repo): POST to
 // atlas-agent-run?action=log with { agent_key, status, summary, metrics }, status is
 // one of success|failed|partial (NOT 'error'). Wrapped in try/catch — a reporting
-// hiccup must NEVER break the actual import/sync run.
-function reportRun_(agentKey, status, summary, metrics) {
+// hiccup must NEVER break the actual import/sync run. `error` is optional — pass the
+// real failure reason on the failed path so ATLAS shows more than the summary string.
+function reportRun_(agentKey, status, summary, metrics, error) {
   try {
     const token = PropertiesService.getScriptProperties().getProperty('ATLAS_AGENT_TOKEN');
     if (!token) {
       Logger.log('reportRun_ skipped: ATLAS_AGENT_TOKEN not set in Script Properties');
       return;
     }
+    const payload = { agent_key: agentKey, status: status, summary: summary, metrics: metrics };
+    if (error) payload.error = error;
     UrlFetchApp.fetch('https://srv-spine.netlify.app/.netlify/functions/atlas-agent-run?action=log', {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + token },
-      payload: JSON.stringify({ agent_key: agentKey, status: status, summary: summary, metrics: metrics }),
+      payload: JSON.stringify(payload),
       muteHttpExceptions: true,
     });
   } catch (err) {
