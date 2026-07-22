@@ -4,3 +4,9 @@
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+
+# Stage 2 — daily SAGE pulse (recruitment KPIs → atlas-agent-run). Classic
+# scheduled-function config, matching this repo's plain CommonJS `exports.handler`
+# functions (no v2 `export const config` syntax needed).
+[functions."atlas-recruiter-pulse"]
+  schedule = "@daily"

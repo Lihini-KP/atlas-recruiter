@@ -24,6 +24,8 @@
  *      SUPABASE_PUBLISHABLE_KEY = sb_publishable_B4aLeP-6Ulc_2ddAeGUYjA__xNHxNJp
  *      CV_BOT_EMAIL = <the bot account's email>
  *      CV_BOT_PASSWORD = <the bot account's password>
+ *      ATLAS_AGENT_TOKEN = <same value as Netlify's ATLAS_AGENT_TOKEN — set here
+ *        separately, Script Properties are NOT shared with Netlify env vars>
  * 5. Run ▸ select `importCvsFromGmail` ▸ click Run once to trigger the Google
  *    authorization prompt (grant it — it's your own script on your own mailbox).
  * 6. Triggers (clock icon, left sidebar) → Add Trigger → function
@@ -36,77 +38,113 @@ const APP_BASE_URL = 'https://atlas-recruiter.netlify.app';
 const SERVER_USER_AGENT = 'AppsScript-ATLAS-CV-Import/1.0';
 
 function importCvsFromGmail() {
-  const props = PropertiesService.getScriptProperties();
-  const SUPABASE_URL = props.getProperty('SUPABASE_URL');
-  const PUBLISHABLE_KEY = props.getProperty('SUPABASE_PUBLISHABLE_KEY');
-  const BOT_EMAIL = props.getProperty('CV_BOT_EMAIL');
-  const BOT_PASSWORD = props.getProperty('CV_BOT_PASSWORD');
-  if (!SUPABASE_URL || !PUBLISHABLE_KEY || !BOT_EMAIL || !BOT_PASSWORD) {
-    throw new Error('Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CV_BOT_EMAIL and CV_BOT_PASSWORD in Script Properties first.');
-  }
-
-  const accessToken = getBotAccessToken(SUPABASE_URL, PUBLISHABLE_KEY, BOT_EMAIL, BOT_PASSWORD);
-
-  let label = GmailApp.getUserLabelByName(CV_LABEL_NAME);
-  if (!label) label = GmailApp.createLabel(CV_LABEL_NAME);
-
-  const threads = GmailApp.search(SEARCH_QUERY, 0, 50);
   let imported = 0, skippedDup = 0, skippedNonApp = 0;
 
-  threads.forEach((thread) => {
-    thread.getMessages().forEach((message) => {
-      const messageId = message.getId();
-      const subject = message.getSubject() || '';
-      const body = message.getPlainBody() || '';
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const SUPABASE_URL = props.getProperty('SUPABASE_URL');
+    const PUBLISHABLE_KEY = props.getProperty('SUPABASE_PUBLISHABLE_KEY');
+    const BOT_EMAIL = props.getProperty('CV_BOT_EMAIL');
+    const BOT_PASSWORD = props.getProperty('CV_BOT_PASSWORD');
+    if (!SUPABASE_URL || !PUBLISHABLE_KEY || !BOT_EMAIL || !BOT_PASSWORD) {
+      throw new Error('Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CV_BOT_EMAIL and CV_BOT_PASSWORD in Script Properties first.');
+    }
 
-      if (!looksLikeApplication(subject, body)) {
-        skippedNonApp++;
-        return;
-      }
+    const accessToken = getBotAccessToken(SUPABASE_URL, PUBLISHABLE_KEY, BOT_EMAIL, BOT_PASSWORD);
 
-      if (candidateAlreadyImported(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, messageId)) {
-        skippedDup++;
+    let label = GmailApp.getUserLabelByName(CV_LABEL_NAME);
+    if (!label) label = GmailApp.createLabel(CV_LABEL_NAME);
+
+    const threads = GmailApp.search(SEARCH_QUERY, 0, 50);
+
+    threads.forEach((thread) => {
+      thread.getMessages().forEach((message) => {
+        const messageId = message.getId();
+        const subject = message.getSubject() || '';
+        const body = message.getPlainBody() || '';
+
+        if (!looksLikeApplication(subject, body)) {
+          skippedNonApp++;
+          return;
+        }
+
+        if (candidateAlreadyImported(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, messageId)) {
+          skippedDup++;
+          thread.addLabel(label);
+          return;
+        }
+
+        const attachment = pickCvAttachment(message);
+        if (!attachment) {
+          skippedNonApp++;
+          return;
+        }
+
+        const senderName = extractSenderName(message.getFrom());
+        const senderEmail = extractSenderEmail(message.getFrom());
+
+        const now = new Date();
+        const ext = extensionForMimeType(attachment.getContentType());
+        const slug = slugify(senderName || senderEmail || 'candidate');
+        const path = 'unmatched/' + now.getFullYear() + '/' + (now.getMonth() + 1) + '/' + slug + '-' + messageId + '.' + ext;
+
+        uploadToSupabaseStorage(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, path, attachment);
+        insertCandidateRow(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, {
+          full_name: senderName,
+          email: senderEmail,
+          cv_storage_path: path,
+          status: 'unmatched',
+          source: 'email_import',
+          source_email_id: messageId,
+          source_subject: subject,
+        });
+
+        // Best-effort designation guess for the immediate acknowledgement email only —
+        // this is NOT treated as a confirmed match; the candidate still lands in the
+        // Unmatched queue for HR to properly assign to a real open position.
+        const designationGuess = extractDesignationFromSubject(subject);
+        sendThankYouEmail(senderEmail, senderName, designationGuess);
+
         thread.addLabel(label);
-        return;
-      }
-
-      const attachment = pickCvAttachment(message);
-      if (!attachment) {
-        skippedNonApp++;
-        return;
-      }
-
-      const senderName = extractSenderName(message.getFrom());
-      const senderEmail = extractSenderEmail(message.getFrom());
-
-      const now = new Date();
-      const ext = extensionForMimeType(attachment.getContentType());
-      const slug = slugify(senderName || senderEmail || 'candidate');
-      const path = 'unmatched/' + now.getFullYear() + '/' + (now.getMonth() + 1) + '/' + slug + '-' + messageId + '.' + ext;
-
-      uploadToSupabaseStorage(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, path, attachment);
-      insertCandidateRow(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, {
-        full_name: senderName,
-        email: senderEmail,
-        cv_storage_path: path,
-        status: 'unmatched',
-        source: 'email_import',
-        source_email_id: messageId,
-        source_subject: subject,
+        imported++;
       });
-
-      // Best-effort designation guess for the immediate acknowledgement email only —
-      // this is NOT treated as a confirmed match; the candidate still lands in the
-      // Unmatched queue for HR to properly assign to a real open position.
-      const designationGuess = extractDesignationFromSubject(subject);
-      sendThankYouEmail(senderEmail, senderName, designationGuess);
-
-      thread.addLabel(label);
-      imported++;
     });
-  });
 
-  Logger.log('Imported: ' + imported + ', duplicates skipped: ' + skippedDup + ', non-applications skipped: ' + skippedNonApp);
+    const skipped = skippedDup + skippedNonApp;
+    Logger.log('Imported: ' + imported + ', duplicates skipped: ' + skippedDup + ', non-applications skipped: ' + skippedNonApp);
+    reportRun_('atlas-recruiter-cv-import', 'success', 'imported ' + imported + ', skipped ' + skipped, { imported: imported, skipped: skipped });
+  } catch (err) {
+    const skipped = skippedDup + skippedNonApp;
+    reportRun_('atlas-recruiter-cv-import', 'failed', 'CV import failed: ' + err.message, { imported: imported, skipped: skipped }, (err && err.message) ? err.message : String(err));
+    throw err;
+  }
+}
+
+// ATLAS agent-run reporting (Stage 2). Mirrors SPINE's reportAgentRun one-shot helper
+// (netlify/functions/_lib/agent-report.mjs in the spine repo): POST to
+// atlas-agent-run?action=log with { agent_key, status, summary, metrics }, status is
+// one of success|failed|partial (NOT 'error'). Wrapped in try/catch — a reporting
+// hiccup must NEVER break the actual import/sync run. `error` is optional — pass the
+// real failure reason on the failed path so ATLAS shows more than the summary string.
+function reportRun_(agentKey, status, summary, metrics, error) {
+  try {
+    const token = PropertiesService.getScriptProperties().getProperty('ATLAS_AGENT_TOKEN');
+    if (!token) {
+      Logger.log('reportRun_ skipped: ATLAS_AGENT_TOKEN not set in Script Properties');
+      return;
+    }
+    const payload = { agent_key: agentKey, status: status, summary: summary, metrics: metrics };
+    if (error) payload.error = error;
+    UrlFetchApp.fetch('https://srv-spine.netlify.app/.netlify/functions/atlas-agent-run?action=log', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+  } catch (err) {
+    Logger.log('reportRun_ failed (run itself is unaffected): ' + err.message);
+  }
 }
 
 function getBotAccessToken(url, publishableKey, email, password) {

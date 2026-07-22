@@ -32,6 +32,7 @@
 <script src="lib/sidebar.js"></script>
 <script src="lib/poster-templates.js"></script>
 <script src="lib/generate-poster.js"></script>
+<script src="lib/atlas-task.js"></script>
 <script>
 const main = document.getElementById('main-content');
 
@@ -149,6 +150,16 @@ async function loadQueue() {
           entity_id: r.id,
           after: updated,
         });
+
+        if (action === 'approved' || action === 'rejected') {
+          await postAtlasTask({
+            kind: 'requisition',
+            action: 'resolve',
+            id: r.id,
+            outcome: action === 'approved' ? 'approved' : 'rejected',
+            title: `Requisition approval: ${r.designation} — ${r.department} (${r.companies.name})`,
+          });
+        }
 
         if (action === 'approved') {
           try {
