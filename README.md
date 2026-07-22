@@ -30,3 +30,16 @@ Set these in Netlify environment variables once a site is created — never comm
 No build step. Serve `index.html` + `netlify/functions/` with `netlify dev` once the Netlify CLI
 is linked to a site, or open `index.html` directly for UI-only iteration (the two functions will
 404 until a Netlify dev server or deployed site is running).
+
+## SPINE integration secrets
+
+Set these in Netlify environment variables (names only — values are set out-of-band by
+whoever holds SPINE's env, never committed here):
+
+| Variable | Purpose |
+|---|---|
+| `ATLAS_BRIDGE_SECRET` | HMAC secret SPINE signs launch tokens with, verified by `netlify/functions/sso-bridge.js` — **required now** |
+
+`APP_TASK_SECRET` and `ATLAS_AGENT_TOKEN` are for the Stage-2 two-way wiring (requisition/
+offer approval tasks pushed to SPINE, scheduled agent-run reporting) — not used by
+anything in this PR, listed here so they land in the same place when Stage 2 ships.
