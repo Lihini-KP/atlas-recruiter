@@ -100,6 +100,7 @@
 <script src="lib/sso.js"></script>
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
+<script src="lib/atlas-task.js"></script>
 <script>
 const form = document.getElementById('request-form');
 const submitBtn = document.getElementById('submit-btn');
@@ -195,6 +196,15 @@ form.addEventListener('submit', async (e) => {
     entity_id: inserted.id,
     before: null,
     after: inserted,
+  });
+
+  const companyName = companySelect.options[companySelect.selectedIndex]?.text || '';
+  await postAtlasTask({
+    kind: 'requisition',
+    action: 'open',
+    id: inserted.id,
+    title: `Requisition approval: ${row.designation} — ${row.department} (${companyName})`,
+    description: `${row.vacancies} vacancy(ies) · ${row.employment_type} · ${row.work_location}`,
   });
 
   requestPanel.classList.add('hidden');

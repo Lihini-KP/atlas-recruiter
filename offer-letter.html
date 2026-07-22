@@ -70,6 +70,7 @@
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
 <script src="lib/company-styles.js"></script>
+<script src="lib/atlas-task.js"></script>
 <script>
 const main = document.getElementById('main-content');
 const pageSubtitle = document.getElementById('page-subtitle');
@@ -270,6 +271,14 @@ function bindOfferRow(candidate, companyName, designation) {
       candidate.offers = [{ salary, joining_date: joiningDate, sent_at: sentAt, created_at: sentAt }];
       row.outerHTML = renderOfferRow(candidate, companyName, designation);
       bindOfferRow(candidate, companyName, designation);
+
+      await postAtlasTask({
+        kind: 'offer',
+        action: 'resolve',
+        id: candidate.id,
+        outcome: 'sent',
+        title: `Offer sign-off: ${candidate.full_name || candidate.email} — ${designation}`,
+      });
     } catch (err) {
       alert(err.message);
       markSentBtn.disabled = false;
