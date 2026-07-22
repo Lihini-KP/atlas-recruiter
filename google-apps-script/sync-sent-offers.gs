@@ -17,57 +17,64 @@
  */
 
 function syncSentOffers() {
-  const props = PropertiesService.getScriptProperties();
-  const SUPABASE_URL = props.getProperty('SUPABASE_URL');
-  const PUBLISHABLE_KEY = props.getProperty('SUPABASE_PUBLISHABLE_KEY');
-  const BOT_EMAIL = props.getProperty('CV_BOT_EMAIL');
-  const BOT_PASSWORD = props.getProperty('CV_BOT_PASSWORD');
-  const ANTHROPIC_API_KEY = props.getProperty('ANTHROPIC_API_KEY');
-  if (!SUPABASE_URL || !PUBLISHABLE_KEY || !BOT_EMAIL || !BOT_PASSWORD || !ANTHROPIC_API_KEY) {
-    throw new Error('Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CV_BOT_EMAIL, CV_BOT_PASSWORD and ANTHROPIC_API_KEY in Script Properties first.');
-  }
-
-  const accessToken = getBotAccessToken(SUPABASE_URL, PUBLISHABLE_KEY, BOT_EMAIL, BOT_PASSWORD);
-
-  const candidates = fetchCandidatesAwaitingOfferSync(SUPABASE_URL, PUBLISHABLE_KEY, accessToken);
   let recorded = 0, skipped = 0;
 
-  candidates.forEach((candidate) => {
-    if (!candidate.email) { skipped++; return; }
-
-    const query = 'in:sent to:' + candidate.email + ' newer_than:30d';
-    const threads = GmailApp.search(query, 0, 5);
-    let found = null;
-
-    for (const thread of threads) {
-      const messages = thread.getMessages();
-      for (const message of messages) {
-        const text = (message.getSubject() + ' ' + message.getPlainBody()).toLowerCase();
-        if (text.indexOf('offer') !== -1 && (text.indexOf('salary') !== -1 || text.indexOf('position') !== -1 || text.indexOf('pleased') !== -1)) {
-          found = message;
-          break;
-        }
-      }
-      if (found) break;
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const SUPABASE_URL = props.getProperty('SUPABASE_URL');
+    const PUBLISHABLE_KEY = props.getProperty('SUPABASE_PUBLISHABLE_KEY');
+    const BOT_EMAIL = props.getProperty('CV_BOT_EMAIL');
+    const BOT_PASSWORD = props.getProperty('CV_BOT_PASSWORD');
+    const ANTHROPIC_API_KEY = props.getProperty('ANTHROPIC_API_KEY');
+    if (!SUPABASE_URL || !PUBLISHABLE_KEY || !BOT_EMAIL || !BOT_PASSWORD || !ANTHROPIC_API_KEY) {
+      throw new Error('Set SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, CV_BOT_EMAIL, CV_BOT_PASSWORD and ANTHROPIC_API_KEY in Script Properties first.');
     }
 
-    if (!found) { skipped++; return; }
+    const accessToken = getBotAccessToken(SUPABASE_URL, PUBLISHABLE_KEY, BOT_EMAIL, BOT_PASSWORD);
 
-    const extracted = extractOfferDetails(ANTHROPIC_API_KEY, found.getPlainBody());
-    insertOfferRecord(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, {
-      candidate_id: candidate.id,
-      salary: extracted.salary,
-      designation: extracted.designation,
-      joining_date: extracted.joining_date,
-      benefits: extracted.benefits,
-      notice_period: extracted.notice_period,
-      probation: extracted.probation,
-      sent_at: found.getDate().toISOString(),
+    const candidates = fetchCandidatesAwaitingOfferSync(SUPABASE_URL, PUBLISHABLE_KEY, accessToken);
+
+    candidates.forEach((candidate) => {
+      if (!candidate.email) { skipped++; return; }
+
+      const query = 'in:sent to:' + candidate.email + ' newer_than:30d';
+      const threads = GmailApp.search(query, 0, 5);
+      let found = null;
+
+      for (const thread of threads) {
+        const messages = thread.getMessages();
+        for (const message of messages) {
+          const text = (message.getSubject() + ' ' + message.getPlainBody()).toLowerCase();
+          if (text.indexOf('offer') !== -1 && (text.indexOf('salary') !== -1 || text.indexOf('position') !== -1 || text.indexOf('pleased') !== -1)) {
+            found = message;
+            break;
+          }
+        }
+        if (found) break;
+      }
+
+      if (!found) { skipped++; return; }
+
+      const extracted = extractOfferDetails(ANTHROPIC_API_KEY, found.getPlainBody());
+      insertOfferRecord(SUPABASE_URL, PUBLISHABLE_KEY, accessToken, {
+        candidate_id: candidate.id,
+        salary: extracted.salary,
+        designation: extracted.designation,
+        joining_date: extracted.joining_date,
+        benefits: extracted.benefits,
+        notice_period: extracted.notice_period,
+        probation: extracted.probation,
+        sent_at: found.getDate().toISOString(),
+      });
+      recorded++;
     });
-    recorded++;
-  });
 
-  Logger.log('Recorded: ' + recorded + ', skipped (no matching sent email found): ' + skipped);
+    Logger.log('Recorded: ' + recorded + ', skipped (no matching sent email found): ' + skipped);
+    reportRun_('atlas-recruiter-offer-sync', 'success', 'synced ' + recorded + ' offers', { synced: recorded });
+  } catch (err) {
+    reportRun_('atlas-recruiter-offer-sync', 'failed', 'Offer sync failed: ' + err.message, { synced: recorded }, (err && err.message) ? err.message : String(err));
+    throw err;
+  }
 }
 
 function fetchCandidatesAwaitingOfferSync(url, publishableKey, accessToken) {

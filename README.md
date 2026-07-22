@@ -39,7 +39,12 @@ whoever holds SPINE's env, never committed here):
 | Variable | Purpose |
 |---|---|
 | `ATLAS_BRIDGE_SECRET` | HMAC secret SPINE signs launch tokens with, verified by `netlify/functions/sso-bridge.js` — **required now** |
+| `APP_TASK_SECRET` | Shared secret SPINE's `app-task` endpoint checks via `x-app-secret`, used by `netlify/functions/atlas-task.js` to push requisition/offer approval tasks — **required for Stage 2** |
+| `ATLAS_AGENT_TOKEN` | Bearer token for SPINE's `atlas-agent-run` endpoint, used by `netlify/functions/atlas-recruiter-pulse.js` (daily KPI pulse) — **required for Stage 2** |
+| `RECRUITMENT_APPROVER_EMAIL` | Optional — who requisition/offer approval tasks are assigned to. Defaults to `sahan@esilkroute.com.lk` |
 
-`APP_TASK_SECRET` and `ATLAS_AGENT_TOKEN` are for the Stage-2 two-way wiring (requisition/
-offer approval tasks pushed to SPINE, scheduled agent-run reporting) — not used by
-anything in this PR, listed here so they land in the same place when Stage 2 ships.
+**`ATLAS_AGENT_TOKEN` must ALSO be set in the Google Apps Script project's Script
+Properties** (Project Settings → Script Properties), separately from the Netlify env
+var above — the two are not shared. It's read by the `reportRun_()` helper in
+`google-apps-script/cv-import.gs` (reused by `sync-sent-offers.gs`) to report the
+CV-import and offer-sync bot runs to ATLAS.

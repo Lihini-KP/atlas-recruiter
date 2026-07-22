@@ -73,6 +73,7 @@
 <script src="lib/auth-guard.js"></script>
 <script src="lib/sidebar.js"></script>
 <script src="lib/company-styles.js"></script>
+<script src="lib/atlas-task.js"></script>
 <script>
 const APPS_SCRIPT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzXtpw8z03TkI3CGiJLCrJ6u6wUq-WSWDD4xOhio5LGvlkaF9t1YQTRZ3i5WbKwCad7/exec';
 
@@ -263,6 +264,18 @@ function bindRow(candidate) {
       offerSelect.disabled = false;
       if (error) { alert(error.message); return; }
       candidate.offer_selection = value;
+
+      if (value === 'selected') {
+        const candidateName = candidate.full_name || candidate.email;
+        const designation = designationOf(candidate);
+        await postAtlasTask({
+          kind: 'offer',
+          action: 'open',
+          id: candidate.id,
+          title: `Offer sign-off: ${candidateName} — ${designation}`,
+          description: `${companyOf(candidate)} · ${designation}`,
+        });
+      }
     });
   }
 }
