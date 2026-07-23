@@ -484,3 +484,52 @@ grant delete on public.advertisements to authenticated;
 create policy "admin can delete from advertisements bucket"
   on storage.objects for delete
   using (bucket_id = 'advertisements' and current_user_role() = 'admin');
+
+-- ── App hardening: RLS on ai_analysis and hires ──────────────────────────────
+-- These two tables have existed since Phase 0 but never had RLS enabled or any
+-- policies/grants, unlike every other table in this file. Flagged in review:
+-- with RLS disabled, a PostgREST client holding the anon/authenticated role can
+-- read or write every row (Supabase's default privileges already grant table
+-- access to those roles — RLS is the only thing restricting rows). Mirrors the
+-- candidates pattern: hr/admin can select/insert/update, admin only can delete.
+alter table ai_analysis enable row level security;
+
+create policy "ai_analysis readable by hr, admin"
+  on ai_analysis for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "ai_analysis insertable by hr, admin"
+  on ai_analysis for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "ai_analysis updatable by hr, admin"
+  on ai_analysis for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "ai_analysis deletable by admin only"
+  on ai_analysis for delete
+  using (current_user_role() = 'admin');
+
+grant select, insert, update, delete on public.ai_analysis to authenticated;
+
+alter table hires enable row level security;
+
+create policy "hires readable by hr, admin"
+  on hires for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "hires insertable by hr, admin"
+  on hires for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "hires updatable by hr, admin"
+  on hires for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "hires deletable by admin only"
+  on hires for delete
+  using (current_user_role() = 'admin');
+
+grant select, insert, update, delete on public.hires to authenticated;
