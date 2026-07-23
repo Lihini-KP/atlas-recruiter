@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hiring — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Hiring</h1>
+    <p>Everyone who has been sent an offer letter.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  main { max-width: none; margin: 0; }
+  .hiring-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+  .hiring-table th, .hiring-table td {
+    border-bottom: 1px solid var(--border); padding: 10px 14px; text-align: left;
+    vertical-align: top;
+  }
+  .hiring-table th {
+    background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.03em; border-top: 1px solid var(--border);
+  }
+  .hiring-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
+  .hiring-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .hiring-table td:first-child, .hiring-table th:first-child { width: 50px; }
+  .pending { color: var(--muted); font-style: italic; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/sso.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script>
+const main = document.getElementById('main-content');
+
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || candidate.manual_folders?.companies?.name || 'Unassigned';
+}
+
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || candidate.manual_folders?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
+function latestSentOffer(candidate) {
+  const sent = (candidate.offers || []).filter((o) => o.sent_at);
+  if (!sent.length) return null;
+  return sent.slice().sort((a, b) => new Date(b.sent_at) - new Date(a.sent_at))[0];
+}
+
+function cell(value) {
+  return value || '<span class="pending">—</span>';
+}
+
+async function loadHiring() {
+  const { data, error } = await sb
+    .from('candidates')
+    .select('id, full_name, email, phone, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)), offers(joining_date, sent_at)')
+    .order('applied_at', { ascending: false });
+
+  if (error) {
+    main.innerHTML = `<div class="status error">${error.message}</div>`;
+    return;
+  }
+
+  const hired = data
+    .map((c) => ({ candidate: c, offer: latestSentOffer(c) }))
+    .filter((row) => row.offer)
+    .sort((a, b) => new Date(b.offer.sent_at) - new Date(a.offer.sent_at));
+
+  if (!hired.length) {
+    main.innerHTML = '<p class="kpi-note">No one has been sent an offer yet — this fills in automatically once an offer is marked sent in the Offer Letter tab.</p>';
+    return;
+  }
+
+  main.innerHTML = `
+    <section class="panel">
+      <table class="hiring-table">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Name</th>
+            <th>Designation</th>
+            <th>Recruited Company</th>
+            <th>Date Joined</th>
+            <th>Phone Number</th>
+            <th>Email ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${hired.map((row, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${cell(row.candidate.full_name)}</td>
+              <td>${cell(designationOf(row.candidate))}</td>
+              <td>${cell(companyOf(row.candidate))}</td>
+              <td>${cell(row.offer.joining_date)}</td>
+              <td>${cell(row.candidate.phone)}</td>
+              <td>${cell(row.candidate.email)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </section>
+  `;
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('hiring.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadHiring();
+});
+</script>
+
+</body>
+</html>
