@@ -8,6 +8,20 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
+<style>
+  .wizard-steps { display: flex; gap: 8px; margin-bottom: 20px; }
+  .wizard-steps .step-dot {
+    flex: 1; text-align: center; font-size: 11.5px; font-weight: 700; color: var(--muted);
+    padding-bottom: 10px; border-bottom: 3px solid var(--border);
+  }
+  .wizard-steps .step-dot.active { color: var(--accent); border-color: var(--accent); }
+  .wizard-steps .step-dot.done { color: var(--accent); border-color: var(--accent); opacity: 0.6; }
+  .wizard-page { display: none; }
+  .wizard-page.active { display: block; }
+  .scenario-block { margin-bottom: 18px; padding: 14px 16px; background: var(--bg); border-radius: var(--radius); border: 1px solid var(--border); }
+  .scenario-block p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; }
+  .scenario-block label { display: block; margin-bottom: 5px; }
+</style>
 </head>
 <body>
 
@@ -20,54 +34,86 @@
 
 <main>
   <section class="panel" id="form-panel">
-    <h2>Tell us about your knowledge and experience</h2>
-    <form id="assessment-form">
-      <div class="grid">
-        <div class="field"><label>Candidate Name *</label><input name="candidateName" required /></div>
-        <div class="field"><label>Email *</label><input name="candidateEmail" type="email" required /></div>
-        <div class="field full"><label>Position Applied For *</label><input name="position" required /></div>
+    <div class="wizard-steps">
+      <div class="step-dot active" data-step-dot="1">1. Basic Information</div>
+      <div class="step-dot" data-step-dot="2">2. Skills &amp; Expertise</div>
+      <div class="step-dot" data-step-dot="3">3. Situational Judgment</div>
+    </div>
 
-        <div class="field"><label>Years of relevant experience *</label><input name="yearsExperience" placeholder="e.g. 3 years" required /></div>
-        <div class="field full">
-          <label>Describe your relevant work experience and key responsibilities *</label>
-          <textarea name="workExperience" rows="4" required></textarea>
+    <form id="assessment-form">
+      <div class="wizard-page active" data-page="1">
+        <h2>Basic Information</h2>
+        <div class="grid">
+          <div class="field"><label>Candidate Name *</label><input name="candidateName" required /></div>
+          <div class="field"><label>Email *</label><input name="candidateEmail" type="email" required /></div>
+          <div class="field full"><label>Position Applied For *</label><input name="position" required /></div>
+          <div class="field"><label>Years of relevant experience *</label><input name="yearsExperience" placeholder="e.g. 3 years" required /></div>
         </div>
-        <div class="field full">
-          <label>What knowledge, skills, or expertise do you have relevant to this position? *</label>
-          <textarea name="relevantSkills" rows="4" required></textarea>
-        </div>
-        <div class="field full">
-          <label>Any relevant certifications, training, or qualifications?</label>
-          <textarea name="certifications" rows="2"></textarea>
-        </div>
-        <div class="field full">
-          <label>What tools, machinery, or software are you proficient with, relevant to this role? *</label>
-          <textarea name="toolsProficiency" rows="3" required></textarea>
-        </div>
-        <div class="field full">
-          <label>How do you handle working under pressure or tight deadlines? *</label>
-          <textarea name="workUnderPressure" rows="3" required></textarea>
-        </div>
-        <div class="field full">
-          <label>Describe how you typically work within a team *</label>
-          <textarea name="teamwork" rows="3" required></textarea>
-        </div>
-        <div class="field full">
-          <label>Describe a specific achievement or challenge you handled in a similar role *</label>
-          <textarea name="achievement" rows="4" required></textarea>
-        </div>
-        <div class="field full">
-          <label>Why do you think you are a good fit for this position? *</label>
-          <textarea name="whyFit" rows="4" required></textarea>
-        </div>
-        <div class="field full">
-          <label>Professional references (name and contact, optional)</label>
-          <textarea name="references" rows="2"></textarea>
+        <div class="actions">
+          <button type="button" class="btn-primary wizard-next">Next</button>
         </div>
       </div>
-      <div class="actions">
-        <button type="submit" class="btn-primary" id="submit-btn">Submit Self Assessment</button>
+
+      <div class="wizard-page" data-page="2">
+        <h2>Skills &amp; Expertise</h2>
+        <div class="grid">
+          <div class="field full">
+            <label>Describe your relevant work experience and key responsibilities *</label>
+            <textarea name="workExperience" rows="4" required></textarea>
+          </div>
+          <div class="field full">
+            <label>What knowledge, skills, or expertise do you have relevant to this position? *</label>
+            <textarea name="relevantSkills" rows="4" required></textarea>
+          </div>
+          <div class="field full">
+            <label>Any relevant certifications, training, or qualifications?</label>
+            <textarea name="certifications" rows="2"></textarea>
+          </div>
+          <div class="field full">
+            <label>Are you familiar with any tools, machinery, or software relevant to this role? Please list them. *</label>
+            <textarea name="toolsProficiency" rows="3" required></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn-secondary wizard-back">Back</button>
+          <button type="button" class="btn-primary wizard-next">Next</button>
+        </div>
       </div>
+
+      <div class="wizard-page" data-page="3">
+        <h2>Situational Judgment</h2>
+        <p style="font-size:12.5px;color:var(--muted);margin-top:-8px">These general situations can come up in almost any role — tell us how you'd handle each one.</p>
+
+        <div class="scenario-block">
+          <p><b>Scenario 1:</b> You are given a task with a tight deadline, and unexpected problems come up that could delay it. How would you handle this situation?</p>
+          <label>Your response *</label>
+          <textarea name="scenario1" rows="3" required></textarea>
+        </div>
+
+        <div class="scenario-block">
+          <p><b>Scenario 2:</b> A colleague or team member is not completing their share of the work, which is affecting the team's performance. How would you handle this?</p>
+          <label>Your response *</label>
+          <textarea name="scenario2" rows="3" required></textarea>
+        </div>
+
+        <div class="scenario-block">
+          <p><b>Scenario 3:</b> You notice a mistake, safety issue, or quality problem in the workplace that others may not have noticed. What would you do?</p>
+          <label>Your response *</label>
+          <textarea name="scenario3" rows="3" required></textarea>
+        </div>
+
+        <div class="scenario-block">
+          <p><b>Scenario 4:</b> Your supervisor gives you an instruction that conflicts with what you believe is the correct way to do the task. How would you respond?</p>
+          <label>Your response *</label>
+          <textarea name="scenario4" rows="3" required></textarea>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn-secondary wizard-back">Back</button>
+          <button type="submit" class="btn-primary" id="submit-btn">Submit Self Assessment</button>
+        </div>
+      </div>
+
       <div class="status hidden" id="submit-status"></div>
     </form>
   </section>
@@ -85,6 +131,8 @@ const submitStatus = document.getElementById('submit-status');
 const formPanel = document.getElementById('form-panel');
 const donePanel = document.getElementById('done-panel');
 const positionLine = document.getElementById('position-line');
+const pages = Array.from(document.querySelectorAll('.wizard-page'));
+const stepDots = Array.from(document.querySelectorAll('.step-dot'));
 
 // Pre-fill from a link like self-assessment.html?position=Marketing+Executive&name=John+Silva&email=john@example.com
 const params = new URLSearchParams(location.search);
@@ -94,6 +142,38 @@ if (params.get('position')) {
 }
 if (params.get('name')) form.candidateName.value = params.get('name');
 if (params.get('email')) form.candidateEmail.value = params.get('email');
+
+function showPage(pageNum) {
+  pages.forEach((p) => p.classList.toggle('active', Number(p.dataset.page) === pageNum));
+  stepDots.forEach((d) => {
+    const n = Number(d.dataset.stepDot);
+    d.classList.toggle('active', n === pageNum);
+    d.classList.toggle('done', n < pageNum);
+  });
+  window.scrollTo(0, 0);
+}
+
+function currentPageEl() {
+  return pages.find((p) => p.classList.contains('active'));
+}
+
+document.querySelectorAll('.wizard-next').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const page = currentPageEl();
+    const invalid = Array.from(page.querySelectorAll('[required]')).find((el) => !el.checkValidity());
+    if (invalid) {
+      invalid.reportValidity();
+      return;
+    }
+    showPage(Number(page.dataset.page) + 1);
+  });
+});
+
+document.querySelectorAll('.wizard-back').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    showPage(Number(currentPageEl().dataset.page) - 1);
+  });
+});
 
 function setStatus(el, message, type) {
   el.textContent = message;

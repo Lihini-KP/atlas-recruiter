@@ -157,11 +157,10 @@ const ASSESSMENT_COLUMNS = [
   { label: 'Relevant Knowledge/Skills', get: (a) => a.relevantSkills },
   { label: 'Certifications/Training', get: (a) => a.certifications },
   { label: 'Tools/Machinery/Software', get: (a) => a.toolsProficiency },
-  { label: 'Handling Pressure/Deadlines', get: (a) => a.workUnderPressure },
-  { label: 'Teamwork', get: (a) => a.teamwork },
-  { label: 'Achievement/Challenge Handled', get: (a) => a.achievement },
-  { label: 'Why a Good Fit', get: (a) => a.whyFit },
-  { label: 'References', get: (a) => a.references },
+  { label: 'Scenario 1: Tight Deadline', get: (a) => a.scenario1 },
+  { label: 'Scenario 2: Teammate Not Pulling Weight', get: (a) => a.scenario2 },
+  { label: 'Scenario 3: Spotting a Mistake', get: (a) => a.scenario3 },
+  { label: 'Scenario 4: Conflicting Instruction', get: (a) => a.scenario4 },
 ];
 
 function renderAssessmentTable(companyName, designation, items) {

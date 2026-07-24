@@ -55,10 +55,10 @@ async function scoreSelfAssessment(a) {
               `Relevant skills: ${a.relevantSkills}\n` +
               `Certifications: ${a.certifications || 'None'}\n` +
               `Tools/machinery/software: ${a.toolsProficiency}\n` +
-              `Handling pressure: ${a.workUnderPressure}\n` +
-              `Teamwork: ${a.teamwork}\n` +
-              `Achievement/challenge: ${a.achievement}\n` +
-              `Why a good fit: ${a.whyFit}`,
+              `Scenario 1 (tight deadline with unexpected problems): ${a.scenario1}\n` +
+              `Scenario 2 (teammate not pulling their weight): ${a.scenario2}\n` +
+              `Scenario 3 (spotting a mistake/safety/quality issue): ${a.scenario3}\n` +
+              `Scenario 4 (instruction conflicting with own judgment): ${a.scenario4}`,
           },
         ],
       }),
@@ -96,7 +96,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const required = ['candidateName', 'candidateEmail', 'position', 'yearsExperience', 'workExperience', 'relevantSkills', 'toolsProficiency', 'workUnderPressure', 'teamwork', 'achievement', 'whyFit'];
+  const required = ['candidateName', 'candidateEmail', 'position', 'yearsExperience', 'workExperience', 'relevantSkills', 'toolsProficiency', 'scenario1', 'scenario2', 'scenario3', 'scenario4'];
   const missing = required.filter((f) => !a[f]);
   if (missing.length) {
     return { statusCode: 400, body: JSON.stringify({ error: `Missing required fields: ${missing.join(', ')}` }) };
@@ -153,20 +153,17 @@ ${a.certifications || 'Not specified'}
 Tools/Machinery/Software Proficiency:
 ${a.toolsProficiency}
 
-Handling Pressure/Deadlines:
-${a.workUnderPressure}
+Scenario 1 (tight deadline with unexpected problems):
+${a.scenario1}
 
-Teamwork:
-${a.teamwork}
+Scenario 2 (teammate not pulling their weight):
+${a.scenario2}
 
-Achievement/Challenge Handled:
-${a.achievement}
+Scenario 3 (spotting a mistake/safety/quality issue):
+${a.scenario3}
 
-Why They're a Good Fit:
-${a.whyFit}
-
-References:
-${a.references || 'Not provided'}`;
+Scenario 4 (instruction conflicting with own judgment):
+${a.scenario4}`;
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
