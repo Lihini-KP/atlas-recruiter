@@ -533,3 +533,32 @@ create policy "hires deletable by admin only"
   using (current_user_role() = 'admin');
 
 grant select, insert, update, delete on public.hires to authenticated;
+
+-- ── Self Assessment: a second, deeper questionnaire sent automatically once a
+-- candidate is Shortlisted (separate from the initial assessment they filled in
+-- when they first applied). self_assessment_sent_at tracks whether the auto-email
+-- has already gone out, so the hourly Apps Script bot doesn't resend it every run.
+create table self_assessments (
+  id uuid primary key default gen_random_uuid(),
+  candidate_id uuid not null references candidates(id),
+  answers jsonb not null,
+  submitted_at timestamptz not null default now()
+);
+
+alter table candidates add column if not exists self_assessment_sent_at timestamptz;
+
+alter table self_assessments enable row level security;
+
+create policy "self_assessments readable by hr, admin"
+  on self_assessments for select
+  using (current_user_role() in ('hr', 'admin'));
+
+create policy "self_assessments insertable by hr, admin"
+  on self_assessments for insert
+  with check (current_user_role() in ('hr', 'admin'));
+
+create policy "self_assessments deletable by admin only"
+  on self_assessments for delete
+  using (current_user_role() = 'admin');
+
+grant select, insert, delete on public.self_assessments to authenticated;

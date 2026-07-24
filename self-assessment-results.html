@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<script>(function(){var t=localStorage.getItem('atlas-theme');if(t)document.documentElement.dataset.theme=t;})();</script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Self Assessment — ATLAS Recruitment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="with-sidebar">
+
+<div id="sidebar-root"></div>
+
+<header>
+  <div class="brand">
+    <h1>Self Assessment</h1>
+    <p id="page-subtitle">Choose a company to see self assessment responses from shortlisted candidates.</p>
+  </div>
+</header>
+
+<main id="main-content">
+  <p class="kpi-note">Loading…</p>
+</main>
+
+<style>
+  .crumb-nav { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .crumb-nav a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .crumb-nav a:hover { text-decoration: underline; }
+
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .tile {
+    border-radius: 12px; padding: 15px 14px; cursor: pointer; border: 2px solid transparent;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+  .tile .tile-icon { font-size: 20px; margin-bottom: 8px; }
+  .tile .tile-logo { height: 32px; max-width: 100%; object-fit: contain; object-position: left; margin-bottom: 9px; display: block; }
+  .tile .tile-name { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .tile .tile-count { font-size: 11px; opacity: 0.8; }
+
+  .assessment-table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: 12px; }
+  .assessment-table th, .assessment-table td {
+    border-bottom: 1px solid var(--border); padding: 9px 12px; text-align: left;
+    overflow-wrap: break-word;
+  }
+  .assessment-table th {
+    background: var(--bg); font-weight: 700; color: var(--muted); font-size: 10.5px;
+    text-transform: uppercase; letter-spacing: 0.04em; border-top: 1px solid var(--border);
+  }
+  .assessment-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
+  .assessment-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .assessment-table td:first-child { font-weight: 600; }
+</style>
+
+<script src="lib/supabase-client.js"></script>
+<script src="lib/sso.js"></script>
+<script src="lib/auth-guard.js"></script>
+<script src="lib/sidebar.js"></script>
+<script src="lib/company-styles.js"></script>
+<script>
+const main = document.getElementById('main-content');
+const pageSubtitle = document.getElementById('page-subtitle');
+let allAssessments = [];
+let allCompanies = [];
+
+function groupBy(items, keyFn) {
+  const map = new Map();
+  for (const item of items) {
+    const key = keyFn(item);
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(item);
+  }
+  return map;
+}
+
+function companyOf(candidate) {
+  return candidate.recruitment_requests?.companies?.name || candidate.manual_folders?.companies?.name || 'Unassigned';
+}
+
+function designationOf(candidate) {
+  return candidate.recruitment_requests?.designation || candidate.manual_folders?.designation || (candidate.source_subject || candidate.full_name || 'Unknown');
+}
+
+function renderCrumbs(parts) {
+  return `<div class="crumb-nav">${parts.map((p, i) => {
+    const isLast = i === parts.length - 1;
+    return isLast ? `<span>${p.label}</span>` : `<a data-nav="${p.nav}">${p.label}</a><span>›</span>`;
+  }).join('')}</div>`;
+}
+
+function bindCrumbs() {
+  main.querySelectorAll('[data-nav="companies"]').forEach((el) => el.addEventListener('click', renderCompanyList));
+}
+
+function renderCompanyList() {
+  pageSubtitle.textContent = 'Choose a company to see self assessment responses from shortlisted candidates.';
+  const groups = groupBy(allAssessments, (a) => companyOf(a.candidates));
+
+  const names = allCompanies.map((c) => c.name);
+  if (groups.has('Unassigned')) names.push('Unassigned');
+
+  main.innerHTML = `
+    <div class="tile-grid">
+      ${names.map((name) => {
+        const count = (groups.get(name) || []).length;
+        const s = companyStyleFor(name);
+        return `
+          <div class="tile" data-company="${encodeURIComponent(name)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            ${s.logo ? `<img class="tile-logo" src="${s.logo}" alt="${name}" />` : `<div class="tile-icon">📋</div>`}
+            <div class="tile-name">${name}</div>
+            <div class="tile-count">${count} response${count === 1 ? '' : 's'}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  main.querySelectorAll('.tile[data-company]').forEach((tile) => {
+    tile.addEventListener('click', () => renderDesignationList(decodeURIComponent(tile.dataset.company)));
+  });
+}
+
+function renderDesignationList(companyName) {
+  pageSubtitle.textContent = `${companyName} · choose a position to view its self assessment responses.`;
+  const s = companyStyleFor(companyName);
+  const companyItems = allAssessments.filter((a) => companyOf(a.candidates) === companyName);
+  const groups = groupBy(companyItems, (a) => designationOf(a.candidates));
+
+  main.innerHTML = `
+    ${renderCrumbs([{ label: 'Companies', nav: 'companies' }, { label: companyName }])}
+    ${groups.size ? `
+      <div class="tile-grid">
+        ${Array.from(groups.entries()).map(([designation, items]) => `
+          <div class="tile" data-designation="${encodeURIComponent(designation)}" style="background:${s.bg};border-color:${s.border};color:${s.text}">
+            <div class="tile-icon">📌</div>
+            <div class="tile-name">${designation}</div>
+            <div class="tile-count">${items.length} response${items.length > 1 ? 's' : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    ` : '<p class="kpi-note">No self assessments submitted for this company yet.</p>'}
+  `;
+
+  bindCrumbs();
+  main.querySelectorAll('.tile[data-designation]').forEach((tile) => {
+    tile.addEventListener('click', () => renderAssessmentTable(companyName, decodeURIComponent(tile.dataset.designation), groups.get(decodeURIComponent(tile.dataset.designation))));
+  });
+}
+
+const ASSESSMENT_COLUMNS = [
+  { label: 'Candidate Name', get: (a) => a.candidateName || a.candidateEmail },
+  { label: 'Are you currently employed?', get: (a) => a.currentlyEmployed },
+  { label: 'If employed, notice period', get: (a) => (a.currentlyEmployed === 'Yes' ? (a.noticePeriod || '—') : 'N/A') },
+  { label: 'Expected monthly salary', get: (a) => a.expectedSalary },
+  { label: 'When can you join?', get: (a) => a.availableFrom },
+  { label: 'Willing to work in our office location?', get: (a) => a.willingLocation },
+];
+
+function renderAssessmentTable(companyName, designation, items) {
+  pageSubtitle.textContent = `${companyName} · ${designation}`;
+
+  main.innerHTML = `
+    ${renderCrumbs([
+      { label: 'Companies', nav: 'companies' },
+      { label: companyName, nav: 'company', company: companyName },
+      { label: designation },
+    ])}
+    <section class="panel">
+      <h2>${designation}</h2>
+      <p class="kpi-note" style="margin-top:-6px">${items.length} response${items.length > 1 ? 's' : ''} submitted</p>
+      <table class="assessment-table">
+        <thead>
+          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${items.map((item) => {
+            const a = item.answers;
+            return `<tr>${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}</tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </section>
+  `;
+
+  bindCrumbs();
+  const companyCrumb = main.querySelector('[data-nav="company"]');
+  if (companyCrumb) companyCrumb.addEventListener('click', () => renderDesignationList(companyName));
+}
+
+async function loadAssessments() {
+  const [companiesRes, assessmentsRes] = await Promise.all([
+    sb.from('companies').select('id, name').order('name'),
+    sb
+      .from('self_assessments')
+      .select('answers, submitted_at, candidates(id, full_name, source_subject, status, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)))')
+      .order('submitted_at', { ascending: false }),
+  ]);
+
+  if (companiesRes.error) {
+    main.innerHTML = `<div class="status error">${companiesRes.error.message}</div>`;
+    return;
+  }
+  if (assessmentsRes.error) {
+    main.innerHTML = `<div class="status error">${assessmentsRes.error.message}</div>`;
+    return;
+  }
+
+  allCompanies = companiesRes.data;
+  allAssessments = assessmentsRes.data;
+  renderCompanyList();
+}
+
+window.authReady.then((profile) => {
+  if (!profile) return;
+  renderSidebar('self-assessment-results.html');
+  if (!['hr', 'admin'].includes(profile.role)) {
+    main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
+    return;
+  }
+  loadAssessments();
+});
+</script>
+
+</body>
+</html>
