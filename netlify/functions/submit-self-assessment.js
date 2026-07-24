@@ -7,6 +7,7 @@
 
 const HR_EMAIL = process.env.HR_EMAIL || 'hra@esilkroute.com.lk';
 const SERVER_USER_AGENT = 'Netlify-ATLAS-Recruiter/1.0';
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
 async function supabaseFetch(path, options = {}) {
   const url = process.env.SUPABASE_URL;
@@ -22,6 +23,57 @@ async function supabaseFetch(path, options = {}) {
     },
   });
   return res;
+}
+
+// Best-effort AI scoring (0-100) of the self assessment answers against the position —
+// wrapped so a Claude hiccup never blocks saving the actual answers. Returns null (not
+// a number) on any failure, which the caller stores as-is; the UI shows "—" for null.
+async function scoreSelfAssessment(a) {
+  if (!ANTHROPIC_API_KEY) return null;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-5',
+        max_tokens: 200,
+        messages: [
+          {
+            role: 'user',
+            content:
+              `A candidate applying for the position of "${a.position}" submitted this self assessment. ` +
+              'Score it from 0 to 100 on how strong a fit it shows for that position, considering relevant ' +
+              'experience/skills depth, whether examples given are concrete and specific, and overall communication ' +
+              'quality. Return ONLY valid JSON (no markdown fences) of this exact shape: {"mark": number}.\n\n' +
+              `Years of experience: ${a.yearsExperience}\n` +
+              `Work experience: ${a.workExperience}\n` +
+              `Relevant skills: ${a.relevantSkills}\n` +
+              `Certifications: ${a.certifications || 'None'}\n` +
+              `Tools/machinery/software: ${a.toolsProficiency}\n` +
+              `Handling pressure: ${a.workUnderPressure}\n` +
+              `Teamwork: ${a.teamwork}\n` +
+              `Achievement/challenge: ${a.achievement}\n` +
+              `Why a good fit: ${a.whyFit}`,
+          },
+        ],
+      }),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rawText = data.content?.[0]?.text || '{}';
+    const jsonText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const parsed = JSON.parse(jsonText);
+    const mark = Number(parsed.mark);
+    return Number.isFinite(mark) ? Math.max(0, Math.min(100, mark)) : null;
+  } catch {
+    return null;
+  }
 }
 
 exports.handler = async (event) => {
@@ -62,10 +114,12 @@ exports.handler = async (event) => {
       return { statusCode: 404, body: JSON.stringify({ error: 'No candidate found for this email — self assessment links are only sent to existing shortlisted candidates.' }) };
     }
 
+    const mark = await scoreSelfAssessment(a);
+
     const assessmentRes = await supabaseFetch('/rest/v1/self_assessments', {
       method: 'POST',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ candidate_id: candidateId, answers: a }),
+      body: JSON.stringify({ candidate_id: candidateId, answers: a, mark }),
     });
     if (!assessmentRes.ok) {
       const detail = await assessmentRes.text();

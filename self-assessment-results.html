@@ -178,12 +178,13 @@ function renderAssessmentTable(companyName, designation, items) {
       <p class="kpi-note" style="margin-top:-6px">${items.length} response${items.length > 1 ? 's' : ''} submitted</p>
       <table class="assessment-table">
         <thead>
-          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}</tr>
+          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}<th>Mark</th></tr>
         </thead>
         <tbody>
           ${items.map((item) => {
             const a = item.answers;
-            return `<tr>${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}</tr>`;
+            const markCell = item.mark != null ? `${Math.round(item.mark)}%` : '—';
+            return `<tr>${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}<td><b>${markCell}</b></td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -200,7 +201,7 @@ async function loadAssessments() {
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('self_assessments')
-      .select('answers, submitted_at, candidates(id, full_name, source_subject, status, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)))')
+      .select('answers, mark, submitted_at, candidates(id, full_name, source_subject, status, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)))')
       .order('submitted_at', { ascending: false }),
   ]);
 

@@ -542,6 +542,7 @@ create table self_assessments (
   id uuid primary key default gen_random_uuid(),
   candidate_id uuid not null references candidates(id),
   answers jsonb not null,
+  mark numeric, -- 0-100, AI-scored from the answers at submission time (see submit-self-assessment.js)
   submitted_at timestamptz not null default now()
 );
 
