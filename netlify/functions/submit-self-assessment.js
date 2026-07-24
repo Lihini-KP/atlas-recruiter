@@ -44,7 +44,7 @@ exports.handler = async (event) => {
     return { statusCode: 400, body: JSON.stringify({ error: 'Invalid JSON body' }) };
   }
 
-  const required = ['candidateName', 'candidateEmail', 'position', 'currentlyEmployed', 'expectedSalary', 'availableFrom', 'willingLocation'];
+  const required = ['candidateName', 'candidateEmail', 'position', 'yearsExperience', 'workExperience', 'relevantSkills', 'achievement', 'whyFit'];
   const missing = required.filter((f) => !a[f]);
   if (missing.length) {
     return { statusCode: 400, body: JSON.stringify({ error: `Missing required fields: ${missing.join(', ')}` }) };
@@ -85,11 +85,22 @@ exports.handler = async (event) => {
 ${a.candidateName}
 ${a.candidateEmail}
 
-Current Employment: ${a.currentlyEmployed}
-Notice Period: ${a.currentlyEmployed === 'Yes' ? (a.noticePeriod || 'Not specified') : 'N/A'}
-Salary Expectation: ${a.expectedSalary}
-Available From: ${a.availableFrom}
-Willing to work at office location: ${a.willingLocation}`;
+Years of Relevant Experience: ${a.yearsExperience}
+
+Relevant Work Experience:
+${a.workExperience}
+
+Relevant Knowledge/Skills:
+${a.relevantSkills}
+
+Certifications/Training:
+${a.certifications || 'Not specified'}
+
+Achievement/Challenge Handled:
+${a.achievement}
+
+Why They're a Good Fit:
+${a.whyFit}`;
 
   try {
     const res = await fetch('https://api.resend.com/emails', {

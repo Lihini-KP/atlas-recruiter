@@ -152,11 +152,12 @@ function renderDesignationList(companyName) {
 
 const ASSESSMENT_COLUMNS = [
   { label: 'Candidate Name', get: (a) => a.candidateName || a.candidateEmail },
-  { label: 'Are you currently employed?', get: (a) => a.currentlyEmployed },
-  { label: 'If employed, notice period', get: (a) => (a.currentlyEmployed === 'Yes' ? (a.noticePeriod || '—') : 'N/A') },
-  { label: 'Expected monthly salary', get: (a) => a.expectedSalary },
-  { label: 'When can you join?', get: (a) => a.availableFrom },
-  { label: 'Willing to work in our office location?', get: (a) => a.willingLocation },
+  { label: 'Years of Experience', get: (a) => a.yearsExperience },
+  { label: 'Relevant Work Experience', get: (a) => a.workExperience },
+  { label: 'Relevant Knowledge/Skills', get: (a) => a.relevantSkills },
+  { label: 'Certifications/Training', get: (a) => a.certifications },
+  { label: 'Achievement/Challenge Handled', get: (a) => a.achievement },
+  { label: 'Why a Good Fit', get: (a) => a.whyFit },
 ];
 
 function renderAssessmentTable(companyName, designation, items) {

@@ -20,38 +20,33 @@
 
 <main>
   <section class="panel" id="form-panel">
-    <h2>A few quick questions</h2>
+    <h2>Tell us about your knowledge and experience</h2>
     <form id="assessment-form">
       <div class="grid">
         <div class="field"><label>Candidate Name *</label><input name="candidateName" required /></div>
         <div class="field"><label>Email *</label><input name="candidateEmail" type="email" required /></div>
         <div class="field full"><label>Position Applied For *</label><input name="position" required /></div>
 
-        <div class="field">
-          <label>Are you currently employed? *</label>
-          <select name="currentlyEmployed" id="currently-employed" required>
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
-        </div>
-        <div class="field" id="notice-period-field">
-          <label>If employed, what is your notice period?</label>
-          <select name="noticePeriod">
-            <option value="Immediate">Immediate</option>
-            <option value="2 Weeks">2 Weeks</option>
-            <option value="1 Month">1 Month</option>
-            <option value="2 Months">2 Months</option>
-            <option value="3 Months">3 Months</option>
-          </select>
-        </div>
-        <div class="field"><label>Expected Monthly Salary *</label><input name="expectedSalary" placeholder="e.g. LKR 180,000" required /></div>
-        <div class="field"><label>When can you join? *</label><input name="availableFrom" type="date" required /></div>
+        <div class="field"><label>Years of relevant experience *</label><input name="yearsExperience" placeholder="e.g. 3 years" required /></div>
         <div class="field full">
-          <label>Are you willing to work in our office location? *</label>
-          <select name="willingLocation" required>
-            <option value="Yes">Yes</option>
-            <option value="No">No</option>
-          </select>
+          <label>Describe your relevant work experience and key responsibilities *</label>
+          <textarea name="workExperience" rows="4" required></textarea>
+        </div>
+        <div class="field full">
+          <label>What knowledge, skills, or expertise do you have relevant to this position? *</label>
+          <textarea name="relevantSkills" rows="4" required></textarea>
+        </div>
+        <div class="field full">
+          <label>Any relevant certifications, training, or qualifications?</label>
+          <textarea name="certifications" rows="2"></textarea>
+        </div>
+        <div class="field full">
+          <label>Describe a specific achievement or challenge you handled in a similar role *</label>
+          <textarea name="achievement" rows="4" required></textarea>
+        </div>
+        <div class="field full">
+          <label>Why do you think you are a good fit for this position? *</label>
+          <textarea name="whyFit" rows="4" required></textarea>
         </div>
       </div>
       <div class="actions">
