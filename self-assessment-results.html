@@ -156,8 +156,12 @@ const ASSESSMENT_COLUMNS = [
   { label: 'Relevant Work Experience', get: (a) => a.workExperience },
   { label: 'Relevant Knowledge/Skills', get: (a) => a.relevantSkills },
   { label: 'Certifications/Training', get: (a) => a.certifications },
+  { label: 'Tools/Machinery/Software', get: (a) => a.toolsProficiency },
+  { label: 'Handling Pressure/Deadlines', get: (a) => a.workUnderPressure },
+  { label: 'Teamwork', get: (a) => a.teamwork },
   { label: 'Achievement/Challenge Handled', get: (a) => a.achievement },
   { label: 'Why a Good Fit', get: (a) => a.whyFit },
+  { label: 'References', get: (a) => a.references },
 ];
 
 function renderAssessmentTable(companyName, designation, items) {
