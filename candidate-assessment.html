@@ -53,11 +53,12 @@
   .assessment-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--muted) 5%, transparent); }
   .assessment-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .assessment-table td:first-child { font-weight: 600; }
-  .shortlist-btn {
+  .shortlist-btn, .reject-btn {
     padding: 5px 11px; font-size: 11px; border-radius: 999px; border: 1px solid var(--border);
-    background: var(--bg); cursor: pointer; color: var(--text);
+    background: var(--bg); cursor: pointer; color: var(--text); margin-right: 6px;
   }
   .shortlist-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .reject-btn.active { background: var(--red); border-color: var(--red); color: white; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -180,16 +181,21 @@ function renderAssessmentTable(companyName, designation, items) {
       <p class="kpi-note" style="margin-top:-6px">${items.length} assessment${items.length > 1 ? 's' : ''} submitted</p>
       <table class="assessment-table">
         <thead>
-          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}<th>Shortlisted</th></tr>
+          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}<th>Decision</th></tr>
         </thead>
         <tbody>
           ${items.map((item) => {
             const a = item.answers;
-            const isShortlisted = item.candidates?.status === 'shortlisted';
+            const status = item.candidates?.status;
+            const isShortlisted = status === 'shortlisted';
+            const isRejected = status === 'rejected';
             return `
               <tr>
                 ${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}
-                <td><button class="shortlist-btn${isShortlisted ? ' active' : ''}" data-candidate-id="${item.candidates?.id || ''}">${isShortlisted ? 'Shortlisted ✓' : 'Shortlist'}</button></td>
+                <td>
+                  <button class="shortlist-btn${isShortlisted ? ' active' : ''}" data-candidate-id="${item.candidates?.id || ''}">${isShortlisted ? 'Shortlisted ✓' : 'Shortlist'}</button>
+                  <button class="reject-btn${isRejected ? ' active' : ''}" data-candidate-id="${item.candidates?.id || ''}">${isRejected ? 'Rejected ✓' : 'Reject'}</button>
+                </td>
               </tr>
             `;
           }).join('')}
@@ -202,25 +208,37 @@ function renderAssessmentTable(companyName, designation, items) {
   const companyCrumb = main.querySelector('[data-nav="company"]');
   if (companyCrumb) companyCrumb.addEventListener('click', () => renderDesignationList(companyName));
 
-  main.querySelectorAll('.shortlist-btn').forEach((btn) => {
+  function updateDecisionRow(row, newStatus) {
+    const shortlistBtn = row.querySelector('.shortlist-btn');
+    const rejectBtn = row.querySelector('.reject-btn');
+    shortlistBtn.classList.toggle('active', newStatus === 'shortlisted');
+    shortlistBtn.textContent = newStatus === 'shortlisted' ? 'Shortlisted ✓' : 'Shortlist';
+    rejectBtn.classList.toggle('active', newStatus === 'rejected');
+    rejectBtn.textContent = newStatus === 'rejected' ? 'Rejected ✓' : 'Reject';
+  }
+
+  main.querySelectorAll('.shortlist-btn, .reject-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const candidateId = btn.dataset.candidateId;
       if (!candidateId) return;
-      const nowShortlisted = !btn.classList.contains('active');
-      btn.disabled = true;
-      const { error } = await sb
-        .from('candidates')
-        .update({ status: nowShortlisted ? 'shortlisted' : 'assessment_completed' })
-        .eq('id', candidateId);
-      btn.disabled = false;
+      const targetStatus = btn.classList.contains('shortlist-btn') ? 'shortlisted' : 'rejected';
+      const nowActive = !btn.classList.contains('active');
+      const newStatus = nowActive ? targetStatus : 'assessment_completed';
+
+      const row = btn.closest('tr');
+      row.querySelectorAll('button').forEach((b) => (b.disabled = true));
+
+      const { error } = await sb.from('candidates').update({ status: newStatus }).eq('id', candidateId);
+
+      row.querySelectorAll('button').forEach((b) => (b.disabled = false));
       if (error) {
         alert(error.message);
         return;
       }
-      btn.classList.toggle('active', nowShortlisted);
-      btn.textContent = nowShortlisted ? 'Shortlisted ✓' : 'Shortlist';
+
+      updateDecisionRow(row, newStatus);
       const item = items.find((i) => i.candidates?.id === candidateId);
-      if (item) item.candidates.status = nowShortlisted ? 'shortlisted' : 'assessment_completed';
+      if (item) item.candidates.status = newStatus;
     });
   });
 }
