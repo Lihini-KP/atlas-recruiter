@@ -210,6 +210,11 @@ function extensionForMimeType(mimeType) {
 
 function extractDesignationFromSubject(subject) {
   let s = subject.trim();
+  // Strip a job-board prefix like "topjobs: " before the usual prefix stripping.
+  s = s.replace(/^[\w.]+:\s*/, '');
+  // Cut off a trailing " | Executive (1528719) by Name" style suffix some job
+  // boards append after the actual designation.
+  s = s.replace(/\s*\|.*$/, '');
   const prefixes = [
     /^cv\s+submission\s+for\s+/i,
     /^cv\s+for\s+/i,
