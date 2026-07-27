@@ -563,3 +563,16 @@ create policy "self_assessments deletable by admin only"
   using (current_user_role() = 'admin');
 
 grant select, insert, delete on public.self_assessments to authenticated;
+
+-- ── Advertisement tab: manual upload/replace of a poster, for when the
+-- auto-generated one isn't good enough. recruitment_request_id becomes
+-- optional so a manual upload can exist purely as company + designation,
+-- not tied to a formal approved request (same pattern as manual_folders).
+alter table advertisements alter column recruitment_request_id drop not null;
+
+create policy "advertisements updatable by hr, admin"
+  on advertisements for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+grant update on public.advertisements to authenticated;

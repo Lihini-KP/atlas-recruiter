@@ -21,8 +21,26 @@
   </div>
 </header>
 
-<main id="main-content">
-  <p class="kpi-note">Loading…</p>
+<main>
+  <section class="panel upload-form">
+    <h2>Upload Advertisement</h2>
+    <p class="kpi-note" style="margin-top:-10px;border-top:none;padding-top:0">Not happy with an auto-generated poster? Upload your own for a company/designation here.</p>
+    <form id="upload-form">
+      <div class="grid">
+        <div class="field"><label>Company *</label><select name="companyId" id="upload-company" required></select></div>
+        <div class="field"><label>Designation *</label><input name="designation" required /></div>
+        <div class="field full"><label>Poster Image *</label><input type="file" name="posterFile" accept="image/*" required /></div>
+      </div>
+      <div class="actions">
+        <button type="submit" class="btn-primary" id="upload-btn">Upload Advertisement</button>
+      </div>
+      <div class="status hidden" id="upload-status"></div>
+    </form>
+  </section>
+
+  <div id="main-content">
+    <p class="kpi-note">Loading…</p>
+  </div>
 </main>
 
 <style>
@@ -47,6 +65,14 @@
     display: flex; align-items: center; justify-content: center;
   }
   .ad-delete-btn:hover { background: var(--red); }
+  .ad-replace-btn {
+    position: absolute; top: 8px; left: 8px; z-index: 2;
+    width: 24px; height: 24px; border-radius: 50%; border: none;
+    background: rgba(0,0,0,0.55); color: #fff; font-size: 13px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ad-replace-btn:hover { background: var(--accent); }
+  .upload-form .grid { margin-bottom: 4px; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -55,6 +81,11 @@
 <script src="lib/sidebar.js"></script>
 <script>
 const main = document.getElementById('main-content');
+const uploadForm = document.getElementById('upload-form');
+const uploadBtn = document.getElementById('upload-btn');
+const uploadStatus = document.getElementById('upload-status');
+const uploadCompanySelect = document.getElementById('upload-company');
+let companies = [];
 
 function posterUrl(path) {
   return sb.storage.from('advertisements').getPublicUrl(path).data.publicUrl;
@@ -70,6 +101,21 @@ function groupBy(items, keyFn) {
   return map;
 }
 
+function slugify(text) {
+  return text.toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+}
+
+function extFromFilename(name) {
+  const parts = name.split('.');
+  return parts.length > 1 ? parts.pop().toLowerCase() : 'png';
+}
+
+async function loadCompanies() {
+  const { data, error } = await sb.from('companies').select('id, name, code').order('name');
+  if (error) return [];
+  return data;
+}
+
 async function loadAds() {
   const { data, error } = await sb
     .from('advertisements')
@@ -82,16 +128,17 @@ async function loadAds() {
   }
 
   if (!data.length) {
-    main.innerHTML = '<p class="kpi-note">No advertisements yet. They appear automatically once HR approves a request.</p>';
+    main.innerHTML = '<p class="kpi-note">No advertisements yet. They appear automatically once HR approves a request, or upload your own above.</p>';
     return;
   }
 
   const byCompanyDept = groupBy(
     data,
-    (ad) => `${ad.recruitment_requests?.companies?.name || ad.company_code} / ${ad.recruitment_requests?.department || '—'}`
+    (ad) => `${ad.recruitment_requests?.companies?.name || companies.find((c) => c.code === ad.company_code)?.name || ad.company_code} / ${ad.recruitment_requests?.department || '—'}`
   );
 
   const isAdmin = window.currentProfile?.role === 'admin';
+  const canEdit = ['hr', 'admin'].includes(window.currentProfile?.role);
 
   main.innerHTML = Array.from(byCompanyDept.entries())
     .map(([groupKey, ads]) => `
@@ -100,7 +147,11 @@ async function loadAds() {
         <div class="subhead">${ads.length} advertisement${ads.length > 1 ? 's' : ''}</div>
         <div class="ad-poster-grid">
           ${ads.map((ad) => `
-            <div class="ad-card" data-id="${ad.id}">
+            <div class="ad-card" data-id="${ad.id}" data-path="${ad.poster_storage_path}">
+              ${canEdit ? `
+                <button type="button" class="ad-replace-btn" data-id="${ad.id}" data-path="${ad.poster_storage_path}" title="Replace this poster image">🔄</button>
+                <input type="file" accept="image/*" class="ad-replace-input hidden" data-id="${ad.id}" data-path="${ad.poster_storage_path}" />
+              ` : ''}
               ${isAdmin ? `<button type="button" class="ad-delete-btn" data-id="${ad.id}" data-path="${ad.poster_storage_path}" title="Delete this advertisement">✕</button>` : ''}
               <img src="${posterUrl(ad.poster_storage_path)}" alt="${ad.designation}" loading="lazy" />
               <div class="ad-card-body">
@@ -139,15 +190,102 @@ async function loadAds() {
       loadAds();
     });
   });
+
+  main.querySelectorAll('.ad-replace-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.ad-card');
+      card.querySelector('.ad-replace-input').click();
+    });
+  });
+
+  main.querySelectorAll('.ad-replace-input').forEach((input) => {
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+
+      const adId = input.dataset.id;
+      const oldPath = input.dataset.path;
+      const btn = main.querySelector(`.ad-replace-btn[data-id="${adId}"]`);
+      btn.disabled = true;
+      btn.textContent = '…';
+
+      const ext = extFromFilename(file.name);
+      const newPath = `manual/${adId}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await sb.storage.from('advertisements').upload(newPath, file, { contentType: file.type });
+      if (uploadError) {
+        alert('Upload failed: ' + uploadError.message);
+        btn.disabled = false;
+        btn.textContent = '🔄';
+        return;
+      }
+
+      const { error: updateError } = await sb.from('advertisements').update({ poster_storage_path: newPath }).eq('id', adId);
+      if (updateError) {
+        alert('Replace failed: ' + updateError.message);
+        btn.disabled = false;
+        btn.textContent = '🔄';
+        return;
+      }
+
+      await sb.storage.from('advertisements').remove([oldPath]);
+      loadAds();
+    });
+  });
 }
 
-window.authReady.then((profile) => {
+uploadForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const companyId = uploadCompanySelect.value;
+  const company = companies.find((c) => c.id === companyId);
+  const designation = uploadForm.designation.value.trim();
+  const file = uploadForm.posterFile.files[0];
+
+  if (!company || !designation || !file) {
+    return;
+  }
+
+  uploadBtn.disabled = true;
+  uploadBtn.innerHTML = '<span class="spinner"></span>Uploading…';
+  uploadStatus.classList.add('hidden');
+
+  try {
+    const ext = extFromFilename(file.name);
+    const path = `${company.code}/manual/${slugify(designation)}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await sb.storage.from('advertisements').upload(path, file, { contentType: file.type });
+    if (uploadError) throw uploadError;
+
+    const { error: insertError } = await sb.from('advertisements').insert({
+      company_code: company.code,
+      designation,
+      poster_storage_path: path,
+      published: false,
+    });
+    if (insertError) throw insertError;
+
+    uploadForm.reset();
+    loadAds();
+  } catch (err) {
+    uploadStatus.textContent = err.message;
+    uploadStatus.className = 'status error';
+    uploadStatus.classList.remove('hidden');
+  } finally {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Upload Advertisement';
+  }
+});
+
+window.authReady.then(async (profile) => {
   if (!profile) return;
   renderSidebar('advertisement.html');
   if (!['hr', 'admin'].includes(profile.role)) {
+    document.querySelector('.upload-form').classList.add('hidden');
     main.innerHTML = '<p class="kpi-note">You do not have access to this page.</p>';
     return;
   }
+  companies = await loadCompanies();
+  uploadCompanySelect.innerHTML = companies.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
   loadAds();
 });
 </script>
