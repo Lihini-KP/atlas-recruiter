@@ -175,20 +175,30 @@ function looksLikeApplication(subject, body) {
 
 function pickCvAttachment(message) {
   const attachments = message.getAttachments();
+  if (!attachments.length) return null;
+
   const pdf = attachments.find((a) => a.getContentType() === 'application/pdf');
   if (pdf) return pdf;
-  return (
-    attachments.find((a) => {
-      const t = a.getContentType();
-      return t === 'application/msword' || t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    }) || null
-  );
+
+  const doc = attachments.find((a) => {
+    const t = a.getContentType();
+    return t === 'application/msword' || t === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  });
+  if (doc) return doc;
+
+  // Fallback: job boards (e.g. topjobs) sometimes attach CVs in other formats
+  // (scanned images, .rtf, etc.) — accept any real attachment rather than
+  // rejecting a genuine application just because it isn't PDF/DOC/DOCX.
+  return attachments[0];
 }
 
 function extensionForMimeType(mimeType) {
   if (mimeType === 'application/pdf') return 'pdf';
   if (mimeType === 'application/msword') return 'doc';
   if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx';
+  if (mimeType === 'image/jpeg') return 'jpg';
+  if (mimeType === 'image/png') return 'png';
+  if (mimeType === 'application/rtf' || mimeType === 'text/rtf') return 'rtf';
   return 'bin';
 }
 
