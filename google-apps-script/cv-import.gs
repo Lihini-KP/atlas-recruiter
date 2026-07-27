@@ -80,8 +80,14 @@ function importCvsFromGmail() {
           return;
         }
 
-        const senderName = extractSenderName(message.getFrom());
-        const senderEmail = extractSenderEmail(message.getFrom());
+        // Job boards (e.g. topjobs) relay applications from their own address
+        // (jobapplication@topjobs.lk) rather than the candidate's — the real
+        // name/email is only in the body as "Applicant Name:"/"Applicant Email
+        // address:" lines. Prefer those when present, else fall back to the
+        // actual From header (for CVs sent directly by the candidate).
+        const applicantFromBody = extractApplicantFromBody(body);
+        const senderName = applicantFromBody.name || extractSenderName(message.getFrom());
+        const senderEmail = applicantFromBody.email || extractSenderEmail(message.getFrom());
 
         const now = new Date();
         const ext = extensionForMimeType(attachment.getContentType());
@@ -234,6 +240,15 @@ function sendThankYouEmail(email, name, designationGuess) {
     'Human Resources';
 
   MailApp.sendEmail({ to: email, subject: 'Thank You for Applying', body: body });
+}
+
+function extractApplicantFromBody(body) {
+  const nameMatch = body.match(/Applicant Name:\s*(.+)/i);
+  const emailMatch = body.match(/Applicant Email address:\s*([^\s]+@[^\s]+)/i);
+  return {
+    name: nameMatch ? nameMatch[1].trim() : null,
+    email: emailMatch ? emailMatch[1].trim() : null,
+  };
 }
 
 function extractSenderName(from) {
