@@ -158,6 +158,8 @@ function renderDesignationList(companyName) {
   });
 }
 
+let currentTableItems = [];
+
 const ASSESSMENT_COLUMNS = [
   { label: 'Candidate Name', get: (a) => a.candidateName || a.candidateEmail },
   { label: 'Are you currently employed?', get: (a) => a.currentlyEmployed },
@@ -186,16 +188,11 @@ function renderAssessmentTable(companyName, designation, items) {
         <tbody>
           ${items.map((item) => {
             const a = item.answers;
-            const status = item.candidates?.status;
-            const isShortlisted = status === 'shortlisted';
-            const isRejected = status === 'rejected';
+            const candidateId = item.candidates?.id || '';
             return `
-              <tr>
+              <tr data-candidate-id="${candidateId}">
                 ${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}
-                <td>
-                  <button class="shortlist-btn${isShortlisted ? ' active' : ''}" data-candidate-id="${item.candidates?.id || ''}">${isShortlisted ? 'Shortlisted ✓' : 'Shortlist'}</button>
-                  <button class="reject-btn${isRejected ? ' active' : ''}" data-candidate-id="${item.candidates?.id || ''}">${isRejected ? 'Rejected ✓' : 'Reject'}</button>
-                </td>
+                <td class="decision-cell">${decisionCellHTML(candidateId, item.candidates?.status)}</td>
               </tr>
             `;
           }).join('')}
@@ -208,40 +205,48 @@ function renderAssessmentTable(companyName, designation, items) {
   const companyCrumb = main.querySelector('[data-nav="company"]');
   if (companyCrumb) companyCrumb.addEventListener('click', () => renderDesignationList(companyName));
 
-  function updateDecisionRow(row, newStatus) {
-    const shortlistBtn = row.querySelector('.shortlist-btn');
-    const rejectBtn = row.querySelector('.reject-btn');
-    shortlistBtn.classList.toggle('active', newStatus === 'shortlisted');
-    shortlistBtn.textContent = newStatus === 'shortlisted' ? 'Shortlisted ✓' : 'Shortlist';
-    rejectBtn.classList.toggle('active', newStatus === 'rejected');
-    rejectBtn.textContent = newStatus === 'rejected' ? 'Rejected ✓' : 'Reject';
+  currentTableItems = items;
+}
+
+function decisionCellHTML(candidateId, status) {
+  if (status === 'shortlisted') {
+    return `<button class="shortlist-btn active" data-candidate-id="${candidateId}" data-action="undo">Shortlisted ✓</button>`;
+  }
+  if (status === 'rejected') {
+    return `<button class="reject-btn active" data-candidate-id="${candidateId}" data-action="undo">Rejected ✓</button>`;
+  }
+  return `
+    <button class="shortlist-btn" data-candidate-id="${candidateId}" data-action="shortlisted">Shortlist</button>
+    <button class="reject-btn" data-candidate-id="${candidateId}" data-action="rejected">Reject</button>
+  `;
+}
+
+// Event delegation on `main`, bound once at page load — survives every
+// re-render of the table (avoids re-binding/duplicating listeners per row).
+main.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.decision-cell button');
+  if (!btn) return;
+
+  const candidateId = btn.dataset.candidateId;
+  if (!candidateId) return;
+  const newStatus = btn.dataset.action === 'undo' ? 'assessment_completed' : btn.dataset.action;
+
+  const cell = btn.closest('.decision-cell');
+  cell.querySelectorAll('button').forEach((b) => (b.disabled = true));
+
+  const { error } = await sb.from('candidates').update({ status: newStatus }).eq('id', candidateId);
+
+  if (error) {
+    cell.querySelectorAll('button').forEach((b) => (b.disabled = false));
+    alert(error.message);
+    return;
   }
 
-  main.querySelectorAll('.shortlist-btn, .reject-btn').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const candidateId = btn.dataset.candidateId;
-      if (!candidateId) return;
-      const targetStatus = btn.classList.contains('shortlist-btn') ? 'shortlisted' : 'rejected';
-      const nowActive = !btn.classList.contains('active');
-      const newStatus = nowActive ? targetStatus : 'assessment_completed';
+  cell.innerHTML = decisionCellHTML(candidateId, newStatus);
 
-      const row = btn.closest('tr');
-      row.querySelectorAll('button').forEach((b) => (b.disabled = true));
-
-      const { error } = await sb.from('candidates').update({ status: newStatus }).eq('id', candidateId);
-
-      row.querySelectorAll('button').forEach((b) => (b.disabled = false));
-      if (error) {
-        alert(error.message);
-        return;
-      }
-
-      updateDecisionRow(row, newStatus);
-      const item = items.find((i) => i.candidates?.id === candidateId);
-      if (item) item.candidates.status = newStatus;
-    });
-  });
-}
+  const item = currentTableItems.find((i) => i.candidates?.id === candidateId);
+  if (item) item.candidates.status = newStatus;
+});
 
 async function loadAssessments() {
   const [companiesRes, assessmentsRes] = await Promise.all([
