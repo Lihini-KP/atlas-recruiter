@@ -62,8 +62,9 @@ function importCvsFromGmail() {
         const messageId = message.getId();
         const subject = message.getSubject() || '';
         const body = message.getPlainBody() || '';
+        const attachmentNames = message.getAttachments().map((a) => a.getName());
 
-        if (!looksLikeApplication(subject, body)) {
+        if (!looksLikeApplication(subject, body, attachmentNames)) {
           skippedNonApp++;
           return;
         }
@@ -168,7 +169,7 @@ function getBotAccessToken(url, publishableKey, email, password) {
   return data.access_token;
 }
 
-function looksLikeApplication(subject, body) {
+function looksLikeApplication(subject, body, attachmentNames) {
   const text = (subject + ' ' + body).toLowerCase();
   const positive = ['cv', 'resume', 'résumé', 'application for', 'applying for', 'job application'];
   const negative = [
@@ -176,7 +177,13 @@ function looksLikeApplication(subject, body) {
     'employment history check', 'reference check', 'background check',
   ];
   if (negative.some((n) => text.indexOf(n) !== -1)) return false;
-  return positive.some((p) => text.indexOf(p) !== -1);
+  if (positive.some((p) => text.indexOf(p) !== -1)) return true;
+
+  // Fallback: candidates sometimes send a bare subject like "Showroom Executive /
+  // Fahad Fahmy" with an empty body — no keyword anywhere in the text, but the
+  // attached file itself is named e.g. "CV_20260225135....pdf". Treat that as a
+  // genuine application too, rather than rejecting it for lacking a keyword.
+  return (attachmentNames || []).some((name) => /cv|resume|résumé/i.test(name));
 }
 
 function pickCvAttachment(message) {
