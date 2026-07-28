@@ -59,6 +59,12 @@
   }
   .shortlist-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
   .reject-btn.active { background: var(--red); border-color: var(--red); color: white; }
+  .remove-row-btn {
+    width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--bg); color: var(--muted); font-size: 11px; line-height: 1; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .remove-row-btn:hover { background: var(--red); border-color: var(--red); color: white; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -171,6 +177,7 @@ const ASSESSMENT_COLUMNS = [
 
 function renderAssessmentTable(companyName, designation, items) {
   pageSubtitle.textContent = `${companyName} · ${designation}`;
+  const isAdmin = window.currentProfile?.role === 'admin';
 
   main.innerHTML = `
     ${renderCrumbs([
@@ -183,16 +190,17 @@ function renderAssessmentTable(companyName, designation, items) {
       <p class="kpi-note" style="margin-top:-6px">${items.length} assessment${items.length > 1 ? 's' : ''} submitted</p>
       <table class="assessment-table">
         <thead>
-          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}<th>Decision</th></tr>
+          <tr>${ASSESSMENT_COLUMNS.map((c) => `<th>${c.label}</th>`).join('')}<th>Decision</th>${isAdmin ? '<th></th>' : ''}</tr>
         </thead>
         <tbody>
           ${items.map((item) => {
             const a = item.answers;
             const candidateId = item.candidates?.id || '';
             return `
-              <tr data-candidate-id="${candidateId}">
+              <tr data-candidate-id="${candidateId}" data-assessment-id="${item.id}">
                 ${ASSESSMENT_COLUMNS.map((c) => `<td>${c.get(a) ?? '—'}</td>`).join('')}
                 <td class="decision-cell">${decisionCellHTML(candidateId, item.candidates?.status)}</td>
+                ${isAdmin ? `<td><button type="button" class="remove-row-btn" data-assessment-id="${item.id}" title="Remove this assessment entry">✕</button></td>` : ''}
               </tr>
             `;
           }).join('')}
@@ -248,12 +256,38 @@ main.addEventListener('click', async (e) => {
   if (item) item.candidates.status = newStatus;
 });
 
+// Admin-only: remove a single duplicate/incorrect assessment submission —
+// only deletes that assessments row, not the candidate or their other data.
+main.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.remove-row-btn');
+  if (!btn) return;
+
+  const confirmed = confirm('Remove this assessment entry? This cannot be undone.');
+  if (!confirmed) return;
+
+  const assessmentId = btn.dataset.assessmentId;
+  const row = btn.closest('tr');
+  row.querySelectorAll('button').forEach((b) => (b.disabled = true));
+
+  const { error } = await sb.from('assessments').delete().eq('id', assessmentId);
+
+  if (error) {
+    row.querySelectorAll('button').forEach((b) => (b.disabled = false));
+    alert(error.message);
+    return;
+  }
+
+  row.remove();
+  currentTableItems = currentTableItems.filter((i) => i.id !== assessmentId);
+  allAssessments = allAssessments.filter((i) => i.id !== assessmentId);
+});
+
 async function loadAssessments() {
   const [companiesRes, assessmentsRes] = await Promise.all([
     sb.from('companies').select('id, name').order('name'),
     sb
       .from('assessments')
-      .select('answers, submitted_at, candidates(id, full_name, source_subject, status, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)))')
+      .select('id, answers, submitted_at, candidates(id, full_name, source_subject, status, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)))')
       .order('submitted_at', { ascending: false }),
   ]);
 
