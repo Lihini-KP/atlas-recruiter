@@ -39,6 +39,7 @@
       <div class="step-dot active" data-step-dot="1">1. Basic Information</div>
       <div class="step-dot" data-step-dot="2">2. Skills &amp; Expertise</div>
       <div class="step-dot" data-step-dot="3">3. Situational Judgment</div>
+      <div class="step-dot" data-step-dot="4">4. Extracurricular Activities</div>
     </div>
 
     <form id="assessment-form">
@@ -109,7 +110,14 @@
           <textarea name="scenario4" rows="5" placeholder="Type your answer here — a few sentences is enough." required></textarea>
         </div>
 
-        <h2 style="margin-top:24px">Extracurricular Activities</h2>
+        <div class="actions">
+          <button type="button" class="btn-secondary wizard-back">Back</button>
+          <button type="button" class="btn-primary wizard-next">Next</button>
+        </div>
+      </div>
+
+      <div class="wizard-page" data-page="4">
+        <h2>Extracurricular Activities</h2>
         <p style="font-size:12.5px;color:var(--muted);margin-top:-8px">Tell us a bit about life outside work — write "N/A" if a question doesn't apply to you.</p>
 
         <div class="scenario-block">
