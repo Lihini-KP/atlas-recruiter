@@ -58,7 +58,10 @@ async function scoreSelfAssessment(a) {
               `Scenario 1 (tight deadline with unexpected problems): ${a.scenario1}\n` +
               `Scenario 2 (teammate not pulling their weight): ${a.scenario2}\n` +
               `Scenario 3 (spotting a mistake/safety/quality issue): ${a.scenario3}\n` +
-              `Scenario 4 (instruction conflicting with own judgment): ${a.scenario4}`,
+              `Scenario 4 (instruction conflicting with own judgment): ${a.scenario4}\n` +
+              `Extracurricular — club/team/volunteer involvement: ${a.extracurricular1 || 'N/A'}\n` +
+              `Extracurricular — balancing a hobby with work/studies: ${a.extracurricular2 || 'N/A'}\n` +
+              `Extracurricular — initiative taken outside work: ${a.extracurricular3 || 'N/A'}`,
           },
         ],
       }),
@@ -163,7 +166,16 @@ Scenario 3 (spotting a mistake/safety/quality issue):
 ${a.scenario3}
 
 Scenario 4 (instruction conflicting with own judgment):
-${a.scenario4}`;
+${a.scenario4}
+
+Extracurricular — club/team/volunteer involvement:
+${a.extracurricular1 || 'N/A'}
+
+Extracurricular — balancing a hobby with work/studies:
+${a.extracurricular2 || 'N/A'}
+
+Extracurricular — initiative taken outside work:
+${a.extracurricular3 || 'N/A'}`;
 
   try {
     const res = await fetch('https://api.resend.com/emails', {
