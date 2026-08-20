@@ -154,7 +154,16 @@ function reportRun_(agentKey, status, summary, metrics, error) {
   }
 }
 
+// Cached across runs (CacheService, not just within one execution) — every trigger
+// firing used to mint a brand new Supabase auth session via a fresh password login,
+// which is what ballooned auth.sessions/refresh_tokens to ~42MB. Reusing the token
+// until shortly before it expires cuts that back to roughly one login per hour.
 function getBotAccessToken(url, publishableKey, email, password) {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'supabase_access_token_' + email;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
   const resp = UrlFetchApp.fetch(url + '/auth/v1/token?grant_type=password', {
     method: 'post',
     headers: { apikey: publishableKey, 'User-Agent': SERVER_USER_AGENT },
@@ -166,6 +175,10 @@ function getBotAccessToken(url, publishableKey, email, password) {
   if (!data.access_token) {
     throw new Error('Bot login failed: ' + resp.getContentText());
   }
+
+  const ttlSeconds = Math.min(Math.max(60, (data.expires_in || 3600) - 60), 21600);
+  cache.put(cacheKey, data.access_token, ttlSeconds);
+
   return data.access_token;
 }
 
