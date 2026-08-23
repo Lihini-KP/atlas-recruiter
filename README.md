@@ -50,7 +50,7 @@ verification and the SPINE task-body builder).
 | `SUPABASE_URL` | Supabase project URL, used server-side by functions that call Supabase directly |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key for server-side functions (`sso-bridge.js`, `atlas-recruiter-pulse.js`, `analyze-candidate-cv.js`) — bypasses RLS, never exposed client-side |
 | `ANTHROPIC_API_KEY` | Calls Claude for AI CV field extraction (`netlify/functions/analyze-candidate-cv.js`); also set in Apps Script Script Properties for offer-email parsing in `sync-sent-offers.gs` |
-| `RESEND_API_KEY` | Sends candidate/HR notification emails via [Resend](https://resend.com) (`submit-assessment.js`, `send-candidate-thankyou.js`) |
+| `RESEND_API_KEY` | Sends candidate/HR notification emails via [Resend](https://resend.com) (`submit-assessment.js`, `submit-self-assessment.js`) |
 | `RESEND_FROM` | Verified sending address for outbound mail (e.g. `alex@esilkroute.com.lk`) |
 | `HR_EMAIL` | Optional — defaults to `hra@esilkroute.com.lk` |
 | `SSO_DEFAULT_ROLE` | Optional — role assigned to a profile auto-created via SPINE SSO; defaults to `hr` |
