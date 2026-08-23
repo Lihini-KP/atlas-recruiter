@@ -576,3 +576,16 @@ create policy "advertisements updatable by hr, admin"
   with check (current_user_role() in ('hr', 'admin'));
 
 grant update on public.advertisements to authenticated;
+
+-- ── Hiring tab: "Confirm Hired" terminal-state transition. Offers previously
+-- supported select/insert/delete only, so the app had no way to ever record that
+-- a candidate actually joined — offers.accepted, candidates.status='hired' and
+-- recruitment_requests.status='completed' were all valid states that nothing ever
+-- wrote, so "Positions Filled" and the pulse KPIs (open_reqs, offers_out) only
+-- ever grew.
+create policy "offers updatable by hr, admin"
+  on offers for update
+  using (current_user_role() in ('hr', 'admin'))
+  with check (current_user_role() in ('hr', 'admin'));
+
+grant update on public.offers to authenticated;

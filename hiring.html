@@ -40,6 +40,13 @@
   .hiring-table tbody tr:hover td { background: color-mix(in srgb, var(--accent) 6%, transparent); }
   .hiring-table td:first-child, .hiring-table th:first-child { width: 50px; }
   .pending { color: var(--muted); font-style: italic; }
+  .hired-badge { color: var(--accent); font-weight: 700; font-size: 12px; }
+  .confirm-hired-btn {
+    padding: 6px 12px; font-size: 11.5px; border-radius: 999px; border: 1px solid var(--border);
+    background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  .confirm-hired-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .confirm-hired-btn:disabled { opacity: 0.6; cursor: default; }
 </style>
 
 <script src="lib/supabase-client.js"></script>
@@ -67,10 +74,54 @@ function cell(value) {
   return value || '<span class="pending">—</span>';
 }
 
+function decisionCellHTML(row) {
+  if (row.candidate.status === 'hired') return '<span class="hired-badge">✅ Hired</span>';
+  return `<button type="button" class="confirm-hired-btn" data-candidate-id="${row.candidate.id}" data-offer-id="${row.offer.id}" data-request-id="${row.candidate.recruitment_request_id || ''}">Confirm Hired</button>`;
+}
+
+// Marks the terminal state the app previously never wrote: the candidate actually
+// joined (not just "was sent an offer"). Also closes out the recruitment request
+// once enough people have been confirmed hired to fill its vacancies — without
+// this, open_reqs/offers_out/"Positions Filled" only ever grew (fleet:atlas-recruiter#oi-1).
+async function confirmHired(candidateId, offerId, requestId, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Confirming…';
+
+  const { error: offerError } = await sb.from('offers').update({ accepted: true }).eq('id', offerId);
+  if (offerError) {
+    alert(offerError.message);
+    btn.disabled = false;
+    btn.textContent = 'Confirm Hired';
+    return;
+  }
+
+  const { error: candidateError } = await sb.from('candidates').update({ status: 'hired' }).eq('id', candidateId);
+  if (candidateError) {
+    alert(candidateError.message);
+    btn.disabled = false;
+    btn.textContent = 'Confirm Hired';
+    return;
+  }
+
+  if (requestId) {
+    const { data: request } = await sb.from('recruitment_requests').select('vacancies').eq('id', requestId).single();
+    const { count: hiredCount } = await sb
+      .from('candidates')
+      .select('id', { count: 'exact', head: true })
+      .eq('recruitment_request_id', requestId)
+      .eq('status', 'hired');
+    if (request && hiredCount != null && hiredCount >= request.vacancies) {
+      await sb.from('recruitment_requests').update({ status: 'completed' }).eq('id', requestId);
+    }
+  }
+
+  loadHiring();
+}
+
 async function loadHiring() {
   const { data, error } = await sb
     .from('candidates')
-    .select('id, full_name, email, phone, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)), offers(joining_date, sent_at)')
+    .select('id, full_name, email, phone, status, recruitment_request_id, recruitment_requests(designation, companies(name)), manual_folders(designation, companies(name)), offers(id, joining_date, sent_at, accepted)')
     .order('applied_at', { ascending: false });
 
   if (error) {
@@ -100,6 +151,7 @@ async function loadHiring() {
             <th>Date Joined</th>
             <th>Phone Number</th>
             <th>Email ID</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
@@ -112,12 +164,19 @@ async function loadHiring() {
               <td>${cell(row.offer.joining_date)}</td>
               <td>${cell(row.candidate.phone)}</td>
               <td>${cell(row.candidate.email)}</td>
+              <td>${decisionCellHTML(row)}</td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     </section>
   `;
+
+  main.querySelectorAll('.confirm-hired-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      confirmHired(btn.dataset.candidateId, btn.dataset.offerId, btn.dataset.requestId || null, btn);
+    });
+  });
 }
 
 window.authReady.then((profile) => {
