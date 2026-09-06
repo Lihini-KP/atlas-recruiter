@@ -142,13 +142,22 @@ function reportRun_(agentKey, status, summary, metrics, error) {
     }
     const payload = { agent_key: agentKey, status: status, summary: summary, metrics: metrics };
     if (error) payload.error = error;
-    UrlFetchApp.fetch('https://srv-spine.netlify.app/.netlify/functions/atlas-agent-run?action=log', {
+    const resp = UrlFetchApp.fetch('https://srv-spine.netlify.app/.netlify/functions/atlas-agent-run?action=log', {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + token },
       payload: JSON.stringify(payload),
       muteHttpExceptions: true,
     });
+    // muteHttpExceptions means a 4xx/5xx from SPINE would otherwise be totally silent —
+    // this call would look identical to success in the Executions list. Logging the
+    // actual response is the only way to tell a real failure from "never even tried."
+    const code = resp.getResponseCode();
+    if (code >= 300) {
+      Logger.log('reportRun_ REJECTED by SPINE (' + code + ') for ' + agentKey + ': ' + resp.getContentText());
+    } else {
+      Logger.log('reportRun_ ok (' + code + ') for ' + agentKey);
+    }
   } catch (err) {
     Logger.log('reportRun_ failed (run itself is unaffected): ' + err.message);
   }
