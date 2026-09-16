@@ -26,10 +26,29 @@
  *      CV_BOT_PASSWORD = <the bot account's password>
  *      ATLAS_AGENT_TOKEN = <same value as Netlify's ATLAS_AGENT_TOKEN — set here
  *        separately, Script Properties are NOT shared with Netlify env vars>
- * 5. Run ▸ select `importCvsFromGmail` ▸ click Run once to trigger the Google
+ *      ALERT_EMAIL = <address that should get a direct ping when Gmail auth fails,
+ *        e.g. sahan@esilkroute.com.lk — optional; if unset, alerting is skipped, and
+ *        run status still shows up via reportRun_() below>
+ * 5. View ▸ Show manifest file (or the "appsscript.json" entry in the file list) →
+ *    replace its contents with google-apps-script/appsscript.json from this repo, so
+ *    the online editor's live manifest matches what's pinned in git. This repo has no
+ *    clasp/CI push set up, so committing appsscript.json alone does NOT change the
+ *    live script — this manual copy (or a one-time `clasp push`) is what makes the
+ *    pinned scopes take effect.
+ * 6. Run ▸ select `importCvsFromGmail` ▸ click Run once to trigger the Google
  *    authorization prompt (grant it — it's your own script on your own mailbox).
- * 6. Triggers (clock icon, left sidebar) → Add Trigger → function
+ * 7. Triggers (clock icon, left sidebar) → Add Trigger → function
  *    `importCvsFromGmail` → Time-driven → Hour timer → every hour → Save.
+ *
+ * Recurring 401/403 note: this project previously had no appsscript.json anywhere in
+ * git — scopes existed only in the online editor and were granted incrementally, file
+ * by file, each time a new file's setup step said to click Run and re-authorize (see
+ * sync-sent-offers.gs's setup comment, which says as much explicitly). With no manifest
+ * pinning the full scope set, an edit that touches new API surface can require fresh
+ * interactive consent that a time-driven trigger can never satisfy on its own — the
+ * trigger then fails silently until someone opens the editor and re-runs it by hand.
+ * Step 5 above is the fix: commit + apply one manifest with every scope this project's
+ * four files actually use, so scopes stop drifting silently.
  */
 
 const CV_LABEL_NAME = 'ATLAS-Filed';
@@ -122,8 +141,63 @@ function importCvsFromGmail() {
     reportRun_('atlas-recruiter-cv-import', 'success', 'imported ' + imported + ', skipped ' + skipped, { imported: imported, skipped: skipped });
   } catch (err) {
     const skipped = skippedDup + skippedNonApp;
-    reportRun_('atlas-recruiter-cv-import', 'failed', 'CV import failed: ' + err.message, { imported: imported, skipped: skipped }, (err && err.message) ? err.message : String(err));
+    const errMessage = (err && err.message) ? err.message : String(err);
+    const authFailure = isAuthError_(err);
+
+    // Actionable, timestamped log line for Stackdriver (exceptionLogging: STACKDRIVER
+    // in appsscript.json), independent of whether reportRun_'s POST to SPINE succeeds.
+    Logger.log('[' + new Date().toISOString() + '] importCvsFromGmail FAILED' +
+      (authFailure ? ' (Gmail auth failure)' : '') + ': ' + errMessage);
+
+    reportRun_('atlas-recruiter-cv-import', 'failed', 'CV import failed: ' + errMessage, { imported: imported, skipped: skipped }, errMessage);
+
+    // Auth-shaped failures (expired/revoked Gmail authorization, scope drift after an
+    // edit, etc.) are the recurring failure mode this script has hit historically — the
+    // SPINE report above is easy to miss for days, so ping a human directly. This fires
+    // at most once per run — it never loops or retries — and the hourly trigger itself
+    // does not retry a failed execution, so this can't turn into a retry storm.
+    if (authFailure) {
+      sendAlertEmail_(
+        'ATLAS Recruiter: Gmail authorization failure in cv-import.gs',
+        'importCvsFromGmail failed at ' + new Date().toISOString() + ' with what looks like a Gmail ' +
+          'authorization/permission error:\n\n' + errMessage + '\n\n' +
+          'Likely cause: the script\'s Gmail authorization was revoked/expired, or the code ' +
+          'now touches API surface outside the scopes pinned in appsscript.json. Open ' +
+          'https://script.google.com, open this project, and Run ▸ importCvsFromGmail once ' +
+          'manually to re-trigger the authorization prompt.\n\n' +
+          'Imported so far this run: ' + imported + ', skipped: ' + skipped + '.'
+      );
+    }
+
     throw err;
+  }
+}
+
+// Recognizes the auth-shaped failures this script has hit repeatedly in production:
+// GmailApp calls failing because the script's OAuth grant was revoked/expired, or the
+// authorized scopes no longer match what the code touches (401/403 from Google, or the
+// specific error strings Apps Script/Google APIs use for those cases). Deliberately
+// narrow — a Supabase 500 or a transient network error is NOT an auth error and should
+// not page anyone.
+function isAuthError_(err) {
+  const message = String((err && err.message) ? err.message : err);
+  return /\b401\b|\b403\b|authorization is required|not authorized|invalid_grant|access_denied|permission_denied|insufficient (authentication scopes|permission)|forbidden/i.test(message);
+}
+
+// Sends ONE alert email so a human is pinged immediately instead of the failure
+// recurring silently for days (the exact problem this fix is for). Wrapped in its own
+// try/catch so an alerting hiccup (ALERT_EMAIL unset, MailApp quota, etc.) can never
+// mask or replace the real error being thrown out of importCvsFromGmail.
+function sendAlertEmail_(subject, body) {
+  try {
+    const alertEmail = PropertiesService.getScriptProperties().getProperty('ALERT_EMAIL');
+    if (!alertEmail) {
+      Logger.log('sendAlertEmail_ skipped: ALERT_EMAIL not set in Script Properties');
+      return;
+    }
+    MailApp.sendEmail({ to: alertEmail, subject: subject, body: body });
+  } catch (alertErr) {
+    Logger.log('sendAlertEmail_ failed (original error is unaffected): ' + alertErr.message);
   }
 }
 
