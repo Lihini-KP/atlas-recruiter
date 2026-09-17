@@ -29,10 +29,12 @@ Navigation and role gating live in `lib/sidebar.js`. Auth is Supabase-session-ba
 - Static HTML pages, no framework, no bundler.
 - `netlify/functions/` — plain CommonJS (`exports.handler`) Netlify Functions, `node_bundler = "esbuild"`.
 - Supabase: schema + RLS policies live in `supabase/schema.sql` — a single evolving file (see its header comment). It is **not** applied automatically by any CI/deploy step in this repo; it's run manually against the project (Supabase SQL editor, or `supabase db push` once the CLI is linked).
-- `google-apps-script/` — three files sharing one Apps Script project, running as a Gmail-side bot account (`hra@esilkroute.com.lk`):
-  - `cv-import.gs` — polls Gmail for CV submissions, downloads attachments (something the chat-side Gmail connector can't do), creates/matches candidates, sends the applicant a thank-you email.
+- `google-apps-script/` — files sharing one Apps Script project, running as a Gmail-side bot account (`hra@esilkroute.com.lk`):
+  - `cv-import.gs` — polls Gmail for CV submissions, downloads attachments (something the chat-side Gmail connector can't do), creates/matches candidates, sends the applicant a thank-you email. On a Gmail-auth-shaped failure it emails `ALERT_EMAIL` (Script Property) once per run — see the file's top comment for setup, including ALERT_EMAIL.
   - `interview-scheduler.gs` — deployed separately as a web app; creates a Google Meet + calendar invite when `candidate-pipeline.html` schedules an interview.
   - `sync-sent-offers.gs` — detects offer letters sent manually through Gmail (outside the app) and records them so they still appear in the Offer Letter tab.
+  - `self-assessment-sync.gs` — auto-emails the Self Assessment link to newly-shortlisted candidates.
+  - `appsscript.json` — the project's OAuth-scope manifest, now pinned in git (it previously existed only in the online editor, which let scopes drift silently — a leading suspect for the recurring Gmail 401/403 re-auth issue). This file must be manually copied into the online editor's manifest (View ▸ Show manifest file) or pushed via `clasp` — committing it here does not by itself change the live script.
 
 ## Local development
 
