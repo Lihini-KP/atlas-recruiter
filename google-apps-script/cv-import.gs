@@ -51,6 +51,14 @@
  * four files actually use, so scopes stop drifting silently.
  */
 
+// One-time helper — run this once manually (Run ▸ setAlertEmail_ ▸ Run), then it can be
+// deleted or left in place; it's harmless to re-run. Exists only because Script
+// Properties can't be set from outside the Apps Script editor (no clasp/API path).
+function setAlertEmail_() {
+  PropertiesService.getScriptProperties().setProperty('ALERT_EMAIL', 'hra@esilkroute.com.lk,sahan@esilkroute.com.lk');
+  Logger.log('ALERT_EMAIL set to: ' + PropertiesService.getScriptProperties().getProperty('ALERT_EMAIL'));
+}
+
 const CV_LABEL_NAME = 'ATLAS-Filed';
 const SEARCH_QUERY = 'to:hra@esilkroute.com.lk has:attachment newer_than:3d -label:' + CV_LABEL_NAME;
 const APP_BASE_URL = 'https://atlas-recruiter.netlify.app';
