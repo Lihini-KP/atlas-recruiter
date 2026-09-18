@@ -51,10 +51,13 @@
  * four files actually use, so scopes stop drifting silently.
  */
 
-// One-time helper — run this once manually (Run ▸ setAlertEmail_ ▸ Run), then it can be
+// One-time helper — run this once manually (Run ▸ setAlertEmail ▸ Run), then it can be
 // deleted or left in place; it's harmless to re-run. Exists only because Script
 // Properties can't be set from outside the Apps Script editor (no clasp/API path).
-function setAlertEmail_() {
+// Deliberately NOT named with a trailing underscore — Apps Script hides underscore-
+// suffixed functions from the "Select function to run" dropdown, which would make this
+// impossible to invoke manually.
+function setAlertEmail() {
   PropertiesService.getScriptProperties().setProperty('ALERT_EMAIL', 'hra@esilkroute.com.lk,sahan@esilkroute.com.lk');
   Logger.log('ALERT_EMAIL set to: ' + PropertiesService.getScriptProperties().getProperty('ALERT_EMAIL'));
 }
